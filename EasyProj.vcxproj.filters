@@ -41,6 +41,9 @@
     <ClInclude Include="Projector.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="CustomizeTimingDlg.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="EasyProj.cpp">
@@ -53,6 +56,9 @@
       <Filter>Quelldateien</Filter>
     </ClCompile>
     <ClCompile Include="Projector.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="CustomizeTimingDlg.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
