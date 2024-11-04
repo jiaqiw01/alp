@@ -129,6 +129,7 @@ public:
 	long m_PictureTime, m_LedOnTime;
 
 	int num_images = 0;
+	int total_frames = 0;
 	std::vector<std::vector<int>> timing_vals;
 
 private:

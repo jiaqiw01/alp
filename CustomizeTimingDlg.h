@@ -27,6 +27,10 @@ protected:
 
 private:
 	int num_pic;
+	int text_startX = 200;
+	int text_startY = 100;
+	int img_startX = 500;
+	int img_startY = 100;
 	std::vector<std::vector<CEdit*>> fields;
 	std::vector<std::vector<int>> m_values;
 	std::vector<CString> fnames;

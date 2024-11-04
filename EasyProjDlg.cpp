@@ -524,8 +524,18 @@ const int CEasyProjDlg::SetSequenceProperties(CString* errorMessage)
 
 	//TODO: check sequence repetition
 	timing.Repetition = GetDlgItemInt(IDC_SET_REP);
-	timing.NumMultiplex = GetDlgItemInt(IDC_SET_MULTIPLEX);
-	timing.RecordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
+	//timing.NumMultiplex = GetDlgItemInt(IDC_SET_MULTIPLEX);
+	timing.NumMultiplex = total_frames;
+
+	int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
+	// the actual record idx takes into account black frames
+	int actual_recordIdx = 0;
+	for (int i = 0; i < recordIdx; ++i) {
+		for (int j = 0; j < 2; ++j) {
+			actual_recordIdx += timing_vals[i][j];
+		}
+	}
+	timing.RecordIdx = actual_recordIdx;
 
 	CString exErrorMessage;
 	// set repetition
@@ -636,30 +646,41 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 	UpdateData(false);
 	//bring out timing dialog
 	if (num_images > 0) {
-		CustomizeTimingDlg timing_dlg(num_images, loaded_images, fnames);
+		CustomizeTimingDlg timing_dlg(num_images, fnames);
 		if (timing_dlg.DoModal() == IDOK) {
 			this->timing_vals = timing_dlg.get_values();
 			ret = PostprocessImages();
+
 		}
 	}
 	return ret;
 
 }
 
+Gdiplus::Bitmap& get_black_frame(int width, int height) {
+	// Create a Bitmap object with the desired width and height
+	Gdiplus::Bitmap blackImage(width, height, PixelFormat8bppIndexed);
+	return blackImage;
+}
+
 int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
-	int total_frames = 0;
+	total_frames = 0;
 	for (int i = 0; i < loaded_images.size(); ++i) {
 		total_frames += timing_vals[i][0]; //number of repeats
 		total_frames += timing_vals[i][1]; //number of repeats
 	}
 	//sequence allocation
 	int BitPlanes = 1;
-	int ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
+	int ret = 0;
+	//int ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
 	Gdiplus::Status status;
+
+	Gdiplus::Bitmap black_frame(L"\\.psf\\Home\\Desktop\\Desktop-jq\\Retinal\\images\\black_image.bmp");
 
 	for (int i = 0; i < loaded_images.size(); ++i) {
 		int on_frames = timing_vals[i][0]; //number of repeats
 		int black_frames = timing_vals[i][1]; //number of repeats
+
 		for (int j = 0; j < on_frames; ++j) {
 			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
 			Gdiplus::Graphics projGraphics(pProjBmp.get());
@@ -712,7 +733,7 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 				}
 
 				pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-				ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+				//ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
 
 				status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
 				status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
@@ -721,10 +742,53 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 					return ret;
 			}
 		}
+
 		// add black frmaes
 		for (int j = 0; j < black_frames; ++j) {
-			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
 			Gdiplus::Graphics projGraphics(pProjBmp.get());
+			for (int splitPicNum = 0; splitPicNum < m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
+			{
+
+			if (loaded_images[i]->GetWidth() == pProjBmp->GetWidth()
+				&& loaded_images[i]->GetHeight() == pProjBmp->GetHeight())
+			{
+				// resize not necessary -> clone the bitmap
+				pProjBmp.reset(loaded_images[i]->Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+			}
+			else
+			{
+				// draw bitmap into the drawing area of the sequence image, resize
+				status = projGraphics.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+			}
+
+			//if (pProjBmp->GetWidth() != pSeqImageBmp->GetWidth()
+			//	|| pProjBmp->GetHeight() != pSeqImageBmp->GetHeight())
+			//	break;
+
+			// lock RGB image for read access
+			Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
+			// lock 8bpp sequence image for write access
+			Gdiplus::BitmapData bitmapData8bpp;		// image data
+			pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
+
+			BYTE* pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+
+			for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
+			{
+				memset(pImageData8bpp, 0, pProjBmp->GetWidth());  // Set each row to black				}
+				pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
+			}
+
+			pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
+			//ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+
+			status = pProjBmp->UnlockBits(&bitmapData8bpp);	// lock end
+			//status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
+
+			if (ALP_OK != ret)
+				return ret;
+			}
 		}
 	}
 	
