@@ -96,9 +96,9 @@ BEGIN_MESSAGE_MAP(CEasyProjDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_SEQ_FREE, &CEasyProjDlg::OnBnClickedSeqFree)
 	//newly added
 	//master mode
-	ON_BN_CLICKED(IDC_RADIO_SET_CUSTOMIZED, &CEasyProjDlg::OnBnClickedSetCustomized)
 	//slave mode
 	ON_BN_CLICKED(IDC_RADIO_SET_SLAVE_MODE, &CEasyProjDlg::OnBnClickedSetSlave)
+	ON_BN_CLICKED(IDC_SET_CUSTOMIZED, &CEasyProjDlg::OnBnClickedCheckTiming)
 	//set num repetition
 	ON_WM_DESTROY()
 	ON_BN_CLICKED(IDC_SET_SEQ_PARAM, &CEasyProjDlg::OnBnClickedSetSeqParam)
@@ -120,7 +120,7 @@ END_MESSAGE_MAP()
 
 
 //newly added
-void CEasyProjDlg::OnBnClickedSetCustomized() {
+void CEasyProjDlg::OnBnClickedCheckTiming() {
 	UpdateData(TRUE);
 	//if (num_images != 0) {
 	//	CustomizeTimingDlg timing_dlg(num_images);
@@ -530,7 +530,7 @@ const int CEasyProjDlg::SetSequenceProperties(CString* errorMessage)
 	int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
 	// the actual record idx takes into account black frames
 	int actual_recordIdx = 0;
-	for (int i = 0; i < recordIdx; ++i) {
+	for (int i = 0; i < recordIdx - 1; ++i) {
 		for (int j = 0; j < 2; ++j) {
 			actual_recordIdx += timing_vals[i][j];
 		}
@@ -591,7 +591,6 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 
 	int ret = ALP_OK;
 	int nImages = 0;
-	std::vector<CString> fnames;
 	if (IDOK == dlg.DoModal())											// show file open dialog
 	{
 		CWaitCursor WaitCursor;
@@ -614,8 +613,8 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 			CString fileNameLOAD = dlg.GetNextPathName(pos);
 
 			Gdiplus::Bitmap BmpLoaded(fileNameLOAD);			// read the image from file
-
-			loaded_images.push_back(&BmpLoaded);
+			
+			//loaded_images.push_back(&BmpLoaded);
 
 			fnames.push_back(fileNameLOAD);
 
@@ -665,21 +664,22 @@ Gdiplus::Bitmap& get_black_frame(int width, int height) {
 
 int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 	total_frames = 0;
-	for (int i = 0; i < loaded_images.size(); ++i) {
+	for (int i = 0; i < fnames.size(); ++i) {
 		total_frames += timing_vals[i][0]; //number of repeats
 		total_frames += timing_vals[i][1]; //number of repeats
 	}
 	//sequence allocation
 	int BitPlanes = 1;
 	int ret = 0;
-	//int ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
+	ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
 	Gdiplus::Status status;
 
-	Gdiplus::Bitmap black_frame(L"\\.psf\\Home\\Desktop\\Desktop-jq\\Retinal\\images\\black_image.bmp");
+	Gdiplus::Bitmap black_frame(L"C:\\Users\\vision\\Desktop\\alp_tests\\black_image.bmp");
 
-	for (int i = 0; i < loaded_images.size(); ++i) {
+	for (int i = 0; i < fnames.size(); ++i) {
 		int on_frames = timing_vals[i][0]; //number of repeats
 		int black_frames = timing_vals[i][1]; //number of repeats
+		Gdiplus::Bitmap BmpLoaded(fnames[i]);
 
 		for (int j = 0; j < on_frames; ++j) {
 			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
@@ -689,16 +689,20 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 				// create a 8bpp-sequence-image as bitmap with projector dimensions
 				std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
 
-				if (loaded_images[i]->GetWidth() == pProjBmp->GetWidth()
-					&& loaded_images[i]->GetHeight() == pProjBmp->GetHeight())
+				int x = BmpLoaded.GetWidth();
+				int y = BmpLoaded.GetHeight();
+
+				if (BmpLoaded.GetWidth() == pProjBmp->GetWidth()
+					&& BmpLoaded.GetHeight() == pProjBmp->GetHeight())
 				{
 					// resize not necessary -> clone the bitmap
-					pProjBmp.reset(loaded_images[i]->Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+					pProjBmp.reset(BmpLoaded.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
 				}
+				
 				else
 				{
 					// draw bitmap into the drawing area of the sequence image, resize
-					status = projGraphics.DrawImage(loaded_images[i], 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+					status = projGraphics.DrawImage(&BmpLoaded, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
 				}
 
 				if (pProjBmp->GetWidth() != pSeqImageBmp->GetWidth()
@@ -733,7 +737,7 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 				}
 
 				pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-				//ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+				ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
 
 				status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
 				status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
@@ -750,11 +754,11 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 			for (int splitPicNum = 0; splitPicNum < m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
 			{
 
-			if (loaded_images[i]->GetWidth() == pProjBmp->GetWidth()
-				&& loaded_images[i]->GetHeight() == pProjBmp->GetHeight())
+			if (black_frame.GetWidth() == pProjBmp->GetWidth()
+				&& black_frame.GetHeight() == pProjBmp->GetHeight())
 			{
 				// resize not necessary -> clone the bitmap
-				pProjBmp.reset(loaded_images[i]->Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+				pProjBmp.reset(black_frame.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
 			}
 			else
 			{
@@ -762,10 +766,7 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 				status = projGraphics.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
 			}
 
-			//if (pProjBmp->GetWidth() != pSeqImageBmp->GetWidth()
-			//	|| pProjBmp->GetHeight() != pSeqImageBmp->GetHeight())
-			//	break;
-
+			
 			// lock RGB image for read access
 			Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
 			// lock 8bpp sequence image for write access
@@ -781,7 +782,7 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 			}
 
 			pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-			//ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+			ret = m_Projector.AddImage(pImageData8bpp, pProjBmp->GetWidth(), pProjBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
 
 			status = pProjBmp->UnlockBits(&bitmapData8bpp);	// lock end
 			//status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end

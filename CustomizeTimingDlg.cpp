@@ -33,12 +33,12 @@ BOOL CustomizeTimingDlg::OnInitDialog() {
 	int vertOffset = 50;
 	CRect labelRect(leftOffset, vertOffset, leftOffset + boxWidth, vertOffset + boxHeight);
 	CStatic* plabel = new CStatic();
-	CString labelText = _T("ON (ms)");
+	CString labelText = _T("ON ( / base)");
 	plabel->Create(labelText, WS_CHILD | WS_VISIBLE, labelRect, this);
 	leftOffset = leftOffset + offsetX;
 	CRect labelRect2(leftOffset, vertOffset, leftOffset + boxWidth, vertOffset + boxHeight);
 	plabel = new CStatic();
-	labelText = _T("OFF (ms)");
+	labelText = _T("OFF ( / base)");
 	plabel->Create(labelText, WS_CHILD | WS_VISIBLE, labelRect2, this);
 
 	leftOffset = 50;

@@ -293,7 +293,6 @@ int CProjector::GetSeqProperties(CTimingEx &timing, CString *errorMessage) const
 	\
 		return lRet;	\
 	}
-	lRet = AlpSeqInquire(m_DeviceID, m_SequenceID, ALP_ILLUMINATE_TIME, &t.IlluminateTime);
 	GET_SEQ_TIMING(ALP_ILLUMINATE_TIME, &t.IlluminateTime);
 	GET_SEQ_TIMING(ALP_PICTURE_TIME, &t.PictureTime);
 	GET_SEQ_TIMING(ALP_SYNCH_DELAY, &t.SynchDelay);
@@ -507,8 +506,8 @@ int CProjector::SetSynchGateMultiplex(CString* errorMessage) {
 	//the second gate always send 1 synch at the recording frame
 	Gate.Gate[0] = 0;
 	//make sure record_idx is between 1 to num_multiplex
-	//_ASSERT(record_idx >= 1 && record_idx <= num_multiplex);
-	Gate.Gate[record_idx - 1] = 1;
+	_ASSERT(record_idx >= 0 && record_idx < num_multiplex); //already 0-indexed
+	Gate.Gate[record_idx] = 1;
 	int ret2 = AlpDevControlEx(m_DeviceID, ALP_DEV_DYN_SYNCH_OUT2_GATE, &Gate);
 	if (ret1 != ALP_OK) {
 		*errorMessage = L"Error in First SetSynchGate setting gates...";

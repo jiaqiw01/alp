@@ -78,7 +78,8 @@ public:
 	// int member (Slider) for the LED brightness
 	int m_iLedBrightness;
 
-	std::vector<Gdiplus::Bitmap*> loaded_images;
+	//std::vector<Gdiplus::Bitmap*> loaded_images;
+	std::vector<CString> fnames;
 
 	// -----
 	// Control: Button "Load images"
@@ -208,7 +209,7 @@ public:
 	virtual void WinHelp(DWORD dwData, UINT nCmd = HELP_CONTEXT);
 
 	//newly added
-	afx_msg void OnBnClickedSetCustomized();
+	afx_msg void OnBnClickedCheckTiming();
 	afx_msg void OnBnClickedSetSlave();
 	//afx_msg void OnBnClickedSetNumRep();
 	//afx_msg void OnBnClickedSetMultiplex();
