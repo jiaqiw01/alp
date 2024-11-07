@@ -93,6 +93,7 @@ public:
 	CButton m_BtnSeqFree;
 	// Preview of the loaded images
 	CStatic m_Preview;
+	CStatic m_PreviewRecord;
 
 	// Control: Flip Check Box (Mirror image Upside-Down)
 	CButton m_CheckFlip;

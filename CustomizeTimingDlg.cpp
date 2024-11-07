@@ -127,8 +127,6 @@ void CustomizeTimingDlg::CreateRadioButtons(int startX, int startY) {
 
 		// Generate a unique ID for each radio button
 		UINT buttonID = 2000 + i;  // IDs should be unique
-		curr_x = startX + buttonWidth;
-		curr_y = startY + (i * verticalSpacing) + buttonHeight;
 		// Create the radio button
 		pRadioButton->Create(
 			L"Record",  // Button text

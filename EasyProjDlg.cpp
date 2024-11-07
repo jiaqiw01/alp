@@ -57,6 +57,7 @@ void CEasyProjDlg::DoDataExchange(CDataExchange* pDX)
 	//newly added
 	DDX_Control(pDX, IDC_SET_REP, m_EditNumRepetition);
 	DDX_Control(pDX, IDC_SET_CUSTOMIZED, m_EditSetting);
+	DDX_Control(pDX, IDC_PREVIEW_RECORD, m_PreviewRecord);
 	//DDX_Control(pDX, IDC_RADIO_SET_MASTER_MODE, m_BtnMasterMode);
 	DDX_Control(pDX, IDC_PROJ_START, m_BtnProjection);
 	DDX_Control(pDX, IDC_SET_MULTIPLEX, m_EditNumMultiplex);
@@ -124,6 +125,7 @@ END_MESSAGE_MAP()
 void CEasyProjDlg::OnBnClickedCheckTiming() {
 	UpdateData(TRUE);
 	if (!timing_vals.empty()) {
+		record_idx = GetDlgItemInt(IDC_SET_RECORD_IDX);
 		CustomizeTimingDlg timing_dlg(num_images, fnames, record_idx, timing_vals);
 		if (timing_dlg.DoModal() == IDOK) {
 			this->timing_vals = timing_dlg.get_values();
@@ -292,8 +294,8 @@ void CEasyProjDlg::UpdateElements(void)
 	m_RadioBtnLEDTypeCBT140White.EnableWindow(bValidStar07 && !m_Projector.Led(1).IsValid());
 
 	m_sldLedBrightness.EnableWindow( m_Projector.Led(1).IsValid() || m_Projector.Led(2).IsValid() || m_Projector.Led(3).IsValid());
-	m_EditSetting.EnableWindow(bValidSeqence && num_images != 0);
-	m_BtnSequenceLoad.EnableWindow( bValidProjector && !bValidSeqence && (!bValidStar07 || m_Projector.Led(1).IsValid()));
+	//m_EditSetting.EnableWindow(bValidSeqence && num_images != 0);
+	//m_BtnSequenceLoad.EnableWindow( bValidProjector && !bValidSeqence && (!bValidStar07 || m_Projector.Led(1).IsValid()));
 	m_BtnSeqFree.EnableWindow( bValidSeqence);
 
 	// Dynamically enable timing setting controls
@@ -534,7 +536,7 @@ const int CEasyProjDlg::SetSequenceProperties(CString* errorMessage)
 	timing.NumMultiplex = total_frames;
 
 	int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
-	record_idx = record_idx;
+	record_idx = record_idx; // 1-indexed
 	// the actual record idx takes into account black frames
 	int actual_recordIdx = 0;
 	for (int i = 0; i < recordIdx - 1; ++i) {
@@ -649,19 +651,18 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 	SetDlgItemInt(IDC_SET_MULTIPLEX, num_images);
 	SetDlgItemInt(IDC_SET_RECORD_IDX, 1);
 	SetDlgItemInt(IDC_SET_REP, 100);
-	UpdateData(false);
 	//bring out timing dialog
 	if (num_images > 0) {
 		CustomizeTimingDlg timing_dlg(num_images, fnames);
 		if (timing_dlg.DoModal() == IDOK) {
 			this->timing_vals = timing_dlg.get_values();
-			int record_idx = timing_dlg.get_record_index();
-			SetDlgItemInt(IDC_SET_RECORD_IDX, record_idx+1);
-			record_idx = record_idx;
+			record_idx = timing_dlg.get_record_index();
+			SetDlgItemInt(IDC_SET_RECORD_IDX, record_idx);
 			//ret = PostprocessImages();
 
 		}
 	}
+	UpdateData(false);
 	return ret;
 
 }
@@ -690,6 +691,21 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 		int on_frames = timing_vals[i][0]; //number of repeats
 		int black_frames = timing_vals[i][1]; //number of repeats
 		Gdiplus::Bitmap BmpLoaded(fnames[i]);
+
+		if (i + 1 == record_idx) {
+			// create a bitmap with preview dimensions
+			const int thumbWidth = 176;
+			const int thumbHeight = 132;
+			std::auto_ptr<Gdiplus::Bitmap> pThumbBmp(new Gdiplus::Bitmap(thumbWidth, thumbHeight, PixelFormat24bppRGB));
+			Gdiplus::Graphics thumbGraphics(pThumbBmp.get());	// connect the drawing area with preview
+
+			// draw BmpLoaded in the drawing area of the preview
+			status = thumbGraphics.DrawImage(&BmpLoaded, 0, 0, thumbWidth, thumbHeight);
+			HBITMAP hBmp = 0;
+			status = pThumbBmp->GetHBITMAP(Gdiplus::Color(0, 0, 0), &hBmp);	// get bitmap handle
+			m_PreviewRecord.SetBitmap(hBmp);	// draw the preview, dereference previous bitmap
+			DeleteObject(hBmp);
+		}
 
 		for (int j = 0; j < on_frames; ++j) {
 			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
@@ -1124,7 +1140,9 @@ void CEasyProjDlg::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 void CEasyProjDlg::OnBnClickedSeqLoad()
 {
 	CString exErrorMessage;
-	
+	if (!fnames.empty()) {
+		fnames.clear();
+	}
 	//int ret = LoadSequence(&exErrorMessage);
 	int ret = StoreImages(&exErrorMessage);
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
