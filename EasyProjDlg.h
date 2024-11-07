@@ -9,6 +9,7 @@
 
 #include "PlusGdi.h"	// GDI+
 #include "afxcmn.h"
+#include <vector>
 
 // CEasyProjDlg dialog
 class CEasyProjDlg : public CDialogEx
@@ -16,6 +17,7 @@ class CEasyProjDlg : public CDialogEx
 private:
 	CProjector	m_Projector;	// instance of the projector
 	long m_ColourComponents;	// for STAR-07 RGB, each picture is decomposed to 3 colour components; otherwise display is monochrome (1 colour component)
+	int PostprocessImages(CString *errorMessage = NULL);
 
 // Construction
 public:
@@ -49,6 +51,7 @@ public:
 	// Control: Radio button for the projectortype V-Module
 	CButton m_RadioBtnProjTypeVModule;
 	// int member (Radio button) for the projectortype
+	CButton m_EditSetting;
 	int m_iProjType;
 	int m_iMaster;
 	// CString member of the dialog element which shows the projector serial number
@@ -75,6 +78,12 @@ public:
 	CSliderCtrl m_sldLedBrightness;
 	// int member (Slider) for the LED brightness
 	int m_iLedBrightness;
+
+	//std::vector<Gdiplus::Bitmap*> loaded_images;
+	std::vector<CString> fnames;
+
+	int record_idx;
+
 	// -----
 	// Control: Button "Load images"
 	CButton m_BtnSequenceLoad;
@@ -124,6 +133,8 @@ public:
 	long m_PictureTime, m_LedOnTime;
 
 	int num_images = 0;
+	int total_frames = 0;
+	std::vector<std::vector<int>> timing_vals;
 
 private:
 	// Suppress display of two modal message boxes from the OnTimer message handler:
@@ -165,6 +176,7 @@ public:
 	const int SetSequenceProperties(CString *errorMessage = NULL);
 	// load images and add it to a sequence
 	const int LoadSequence(CString *errorMessage = NULL);
+	const int StoreImages(CString* errorMessage = NULL);
 	// -----
 	// function for Led-temperature-inquiry
 	CString &LedTemperature(int Index);
@@ -200,7 +212,7 @@ public:
 	virtual void WinHelp(DWORD dwData, UINT nCmd = HELP_CONTEXT);
 
 	//newly added
-	afx_msg void OnBnClickedSetMaster();
+	afx_msg void OnBnClickedCheckTiming();
 	afx_msg void OnBnClickedSetSlave();
 	//afx_msg void OnBnClickedSetNumRep();
 	//afx_msg void OnBnClickedSetMultiplex();

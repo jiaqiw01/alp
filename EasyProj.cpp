@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "EasyProj.h"
 #include "EasyProjDlg.h"
+#include "CustomizeTimingDlg.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
