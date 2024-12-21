@@ -10,9 +10,9 @@ class CustomizeTimingDlg : public CDialogEx
 	DECLARE_DYNAMIC(CustomizeTimingDlg);
 
 public:
-	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, CWnd* pParent = nullptr);
-	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, int record_idx, CWnd* pParent = nullptr);
-	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, int record_idx, std::vector<std::vector<int>> timings, CWnd* pParent = nullptr);
+	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, CWnd* pParent = nullptr);
+	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, int record_idx, CWnd* pParent = nullptr);
+	CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, int record_idx, std::vector<std::vector<int>> timings, CWnd* pParent = nullptr);
 	~CustomizeTimingDlg();
 	// Dialog Data
 
@@ -41,6 +41,7 @@ private:
 	int button_width = 100;
 	int curr_x;
 	int curr_y;
+	BOOL multiplex_mode;
 	std::vector<std::vector<CEdit*>> fields;
 	std::vector<std::vector<int>> m_values;
 	std::vector<CString> fnames;

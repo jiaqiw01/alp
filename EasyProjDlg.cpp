@@ -57,6 +57,8 @@ void CEasyProjDlg::DoDataExchange(CDataExchange* pDX)
 	//newly added
 	DDX_Control(pDX, IDC_SET_REP, m_EditNumRepetition);
 	DDX_Control(pDX, IDC_SET_CUSTOMIZED, m_EditSetting);
+	DDX_Control(pDX, IDC_MULTIPLEX_MODE, m_MultiplexMode);
+	DDX_Control(pDX, IDC_SEQ_MODE, m_SeqMode);
 	DDX_Control(pDX, IDC_PREVIEW_RECORD, m_PreviewRecord);
 	//DDX_Control(pDX, IDC_RADIO_SET_MASTER_MODE, m_BtnMasterMode);
 	DDX_Control(pDX, IDC_PROJ_START, m_BtnProjection);
@@ -100,7 +102,7 @@ BEGIN_MESSAGE_MAP(CEasyProjDlg, CDialogEx)
 	//master mode
 	//slave mode
 	ON_BN_CLICKED(IDC_RADIO_SET_SLAVE_MODE, &CEasyProjDlg::OnBnClickedSetSlave)
-	ON_BN_CLICKED(IDC_SET_CUSTOMIZED, &CEasyProjDlg::OnBnClickedCheckTiming)
+	ON_BN_CLICKED(IDC_SET_CUSTOMIZED, &CEasyProjDlg::OnBnClickedEditTiming)
 	//set num repetition
 	ON_WM_DESTROY()
 	ON_BN_CLICKED(IDC_SET_SEQ_PARAM, &CEasyProjDlg::OnBnClickedSetSeqParam)
@@ -122,28 +124,35 @@ END_MESSAGE_MAP()
 
 
 //newly added
-void CEasyProjDlg::OnBnClickedCheckTiming() {
+void CEasyProjDlg::OnBnClickedEditTiming() {
 	UpdateData(TRUE);
 	if (!timing_vals.empty()) {
 		record_idx = GetDlgItemInt(IDC_SET_RECORD_IDX);
-		CustomizeTimingDlg timing_dlg(num_images, fnames, record_idx, timing_vals);
+		CustomizeTimingDlg timing_dlg(num_images, fnames, m_MultiplexMode.GetCheck(), record_idx, timing_vals);
 		if (timing_dlg.DoModal() == IDOK) {
-			this->timing_vals = timing_dlg.get_values();
+			std::vector<std::vector<int>> updated_timing_vals = timing_dlg.get_values();
+			if (timing_vals != updated_timing_vals) {
+				timing_vals = updated_timing_vals;
+			}
 			int record_idx = timing_dlg.get_record_index();
 			SetDlgItemInt(IDC_SET_RECORD_IDX, record_idx);
 			record_idx = record_idx;
 		}
 	}
 	else {
-		CustomizeTimingDlg timing_dlg(num_images, fnames, record_idx);
+		CustomizeTimingDlg timing_dlg(num_images, fnames, m_MultiplexMode.GetCheck(), record_idx);
 		if (timing_dlg.DoModal() == IDOK) {
-			this->timing_vals = timing_dlg.get_values();
+			std::vector<std::vector<int>> updated_timing_vals = timing_dlg.get_values();
+			if (timing_vals != updated_timing_vals) {
+				timing_vals = updated_timing_vals;
+			}
 			int record_idx = timing_dlg.get_record_index();
 			SetDlgItemInt(IDC_SET_RECORD_IDX, record_idx);
 			record_idx = record_idx;
 		}
 	}
-
+	//change preview
+	SetRecordPreview();
 }
 	
 
@@ -294,22 +303,22 @@ void CEasyProjDlg::UpdateElements(void)
 	m_RadioBtnLEDTypeCBT140White.EnableWindow(bValidStar07 && !m_Projector.Led(1).IsValid());
 
 	m_sldLedBrightness.EnableWindow( m_Projector.Led(1).IsValid() || m_Projector.Led(2).IsValid() || m_Projector.Led(3).IsValid());
-	//m_EditSetting.EnableWindow(bValidSeqence && num_images != 0);
-	//m_BtnSequenceLoad.EnableWindow( bValidProjector && !bValidSeqence && (!bValidStar07 || m_Projector.Led(1).IsValid()));
-	m_BtnSeqFree.EnableWindow( bValidSeqence);
+	m_EditSetting.EnableWindow(bValidSeqence && num_images != 0);
+	//m_BtnSequenceLoad.EnableWindow( bValidProjector);
+	m_BtnSeqFree.EnableWindow( bValidSeqence );
 
 	// Dynamically enable timing setting controls
-	m_CheckPictureTime.EnableWindow( bValidSeqence );
-	m_EditPictureTime.EnableWindow( bValidSeqence && m_CheckPictureTime.GetCheck() );
-	m_CheckIlluminateTime.EnableWindow( bValidSeqence );
-	m_EditIlluminateTime.EnableWindow( bValidSeqence && m_CheckIlluminateTime.GetCheck() );
-	m_EditNumMultiplex.EnableWindow(bValidSeqence);
-	m_EditNumRepetition.EnableWindow(bValidSeqence);
-	m_EditRecordIdx.EnableWindow(bValidSeqence);
-	m_BtnProjection.EnableWindow( bValidSeqence);
-	m_BtnProjStop.EnableWindow( bValidSeqence);
-	m_BtnSet.EnableWindow( bValidSeqence);
-	m_CheckFlip.EnableWindow( bValidProjector );
+	//m_CheckPictureTime.EnableWindow( bValidSeqence );
+	//m_EditPictureTime.EnableWindow( bValidSeqence && m_CheckPictureTime.GetCheck() );
+	//m_CheckIlluminateTime.EnableWindow( bValidSeqence );
+	//m_EditIlluminateTime.EnableWindow( bValidSeqence && m_CheckIlluminateTime.GetCheck() );
+	//m_EditNumMultiplex.EnableWindow(bValidSeqence);
+	//m_EditNumRepetition.EnableWindow(bValidSeqence);
+	//m_EditRecordIdx.EnableWindow(bValidSeqence);
+	//m_BtnProjection.EnableWindow( bValidSeqence);
+	//m_BtnProjStop.EnableWindow( bValidSeqence);
+	//m_BtnSet.EnableWindow( bValidSeqence);
+	//m_CheckFlip.EnableWindow( bValidProjector );
 	m_CheckFlip.SetCheck( m_Projector.GetFlip() );
 
 	UpdateData( FALSE);													// update direction: data -> dialog elements
@@ -456,23 +465,29 @@ void CEasyProjDlg::SetLEDBrightness( const int iBrightness)
 }
 
 
-// free sequence and reset dialog elements
+// free sequence and reset dialog elements, delete all existing memories, use when need to load new images
 const int CEasyProjDlg::FreeSequence(CString *errorMessage)
 {
 	int ret = ALP_OK;
 	if( m_Projector.IsValidSequence())
 	{
 		ret = m_Projector.SequenceFree(errorMessage);
+		if (ret != ALP_OK && errorMessage != NULL) {
+			CString msg = _T("Sequence Freeing Exists with Error....") + *errorMessage;
+			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONERROR);
+		}
 	}
 	m_SequenceLoadedImages = CString( L" ");
 	SetDlgItemInt( IDC_ILLU_TIME, 1000000 );
 	SetDlgItemInt( IDC_PIC_TIME, 1000000 );
-	SetDlgItemInt(IDC_SET_REP, 0);
+	SetDlgItemInt(IDC_SET_REP, 100);
 	SetDlgItemInt(IDC_SET_MULTIPLEX, 0);
 	SetDlgItemInt(IDC_SET_RECORD_IDX, 0);
 	SetDlgItemInt(IDC_EDIT_REPORT_BITNUM, 1);
 	SetDlgItemText(IDC_ERROR_MSG, _T("NO ERROR MESSAGES NOW"));
 	m_SequenceBitnum.Empty();
+	fnames.clear();
+	timing_vals.clear();
 
 	return ret;
 }
@@ -483,8 +498,6 @@ const int CEasyProjDlg::GetSequenceProperties(CString *errorMessage)
 {
 	CProjector::CTimingEx timing;
 	CString msg;
-	//msg.Format(_T("Before Get Sequence Properties, illu time %d, picture time %d"), timing.IlluminateTime, timing.PictureTime);
-	//MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
 
 	int ret = m_Projector.GetSeqProperties( timing, errorMessage);
 	if (ret != ALP_OK) {
@@ -510,15 +523,19 @@ const int CEasyProjDlg::GetSequenceProperties(CString *errorMessage)
 }
 
 
+
+
 // change sequence properties
 const int CEasyProjDlg::SetSequenceProperties(CString* errorMessage)
 {
-	SetDlgItemText(IDC_ERROR_MSG, _T("Insdie set sequence properties"));
 	UpdateData(TRUE);													// update direction: dialog elements -> data
 
 	CProjector::CTimingEx timing;
-
 	long image_time = 0;
+	CString exErrorMessage;
+	int actual_recordIdx = 0;
+	int period = 0;
+
 	// set illu = pic time by default, no dark
 	if (m_CheckIlluminateTime.GetCheck()) {
 		image_time = GetDlgItemInt(IDC_ILLU_TIME) > 0 ? GetDlgItemInt(IDC_ILLU_TIME) : 0;
@@ -529,60 +546,90 @@ const int CEasyProjDlg::SetSequenceProperties(CString* errorMessage)
 	timing.IlluminateTime = image_time;
 	timing.PictureTime = image_time;
 
-
-	//TODO: check sequence repetition
 	timing.Repetition = GetDlgItemInt(IDC_SET_REP);
-	//timing.NumMultiplex = GetDlgItemInt(IDC_SET_MULTIPLEX);
-	timing.NumMultiplex = total_frames;
 
-	int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
-	record_idx = record_idx; // 1-indexed
-	// the actual record idx takes into account black frames
-	int actual_recordIdx = 0;
-	for (int i = 0; i < recordIdx - 1; ++i) {
-		for (int j = 0; j < 2; ++j) {
-			actual_recordIdx += timing_vals[i][j];
+	//if multiplex mode, need to sum up all images (total_image) and set it to be the period of gate
+	if (m_MultiplexMode.GetCheck()) {
+		m_mode = "Multiplex";
+		timing.NumMultiplex = total_frames;
+
+		int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
+		record_idx = recordIdx; // 1-indexed
+		// the actual record idx takes into account black frames
+		for (int i = 0; i < recordIdx - 1; ++i) {
+			for (int j = 0; j < 2; ++j) {
+				actual_recordIdx += timing_vals[i][j];
+			}
 		}
-	}
-	timing.RecordIdx = actual_recordIdx;
+		timing.RecordIdx = actual_recordIdx;
 
-	CString exErrorMessage;
-	// set repetition
-	long ret = m_Projector.SetReps(timing.Repetition, &exErrorMessage);
-	if (ALP_OK != ret) {
-		SetProjectorReturnCodeMsg(ret, WARNING, exErrorMessage);
-		SetDlgItemText(IDC_ERROR_MSG, exErrorMessage);
-		//UpdateData(false);
+
 	}
+	//if sequence mode, total frame is per sequence, num_multiplex is image frame + black frame, record index is always 0
 	else {
-		SetDlgItemText(IDC_ERROR_MSG, _T("Finished Setting Repetition without Error!"));
+		m_mode = "Sequential";
+		_ASSERT(timing_vals.size() > 0);
+		total_frames = timing_vals[0][0] + timing_vals[0][1];
+		timing.NumMultiplex = total_frames;
+
+		int recordIdx = GetDlgItemInt(IDC_SET_RECORD_IDX);
+		record_idx = recordIdx; // 1-indexed
+		// the actual record idx takes into account black frames
+		actual_recordIdx = 0; //record the non-black image, so it's always the first one
+		timing.RecordIdx = actual_recordIdx;
+		//also set number of repetitions
+		m_Projector.SetReps(timing.Repetition, errorMessage);
+
 	}
-	// set multiplex, record idx
+
 	m_Projector.SetMultiplexRecord(timing.NumMultiplex, timing.RecordIdx);
 	CString message;
-	message.Format(_T("Set Multiplex to %d, Record index to %d, Illuminate Time to %d, Picture time to %d"), timing.NumMultiplex, timing.RecordIdx, timing.IlluminateTime, timing.PictureTime);
+	message.Format(_T("Set Multiplex to %d, Record index to %d, Actual index is %d, Illuminate Time to %d, Picture time to %d"), timing.NumMultiplex, record_idx, actual_recordIdx, timing.IlluminateTime, timing.PictureTime);
 	MessageBox(message, _T("Value Entered"), MB_OK | MB_ICONINFORMATION);
-
+	
 	timing.SynchDelay = 0;	//no delay
 
-	// m_SequenceBitnum is read-only
-	ret = m_Projector.SelectMaxBitnum(timing, errorMessage);
+	int ret = m_Projector.SelectMaxBitnum(timing, errorMessage);
 	if (ret != ALP_OK) {
-		CString message;
-		message.Format(_T("Set Max Bitnum return with error: %s"), errorMessage->GetString());
-		MessageBox(message, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		MessageBox(*errorMessage, _T("After Select Max Bitnum Notification"), MB_OK | MB_ICONINFORMATION);
 	}
 
 	//Set synch gate
-	ret = m_Projector.SetSynchGateMultiplex(errorMessage);
-	
-	if (ret != ALP_OK) {
-		//SetProjectorReturnCodeMsg(ret, WARNING, exErrorMessage);
-		CString message;
-		message.Format(_T("Set Synch Gate Error: %s"), errorMessage->GetString());
-		MessageBox(message, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+	//ret = m_Projector.SetSynchGateMultiplex(errorMessage);
+	if (m_SeqMode.GetCheck()) {
+		period = total_frames * timing.Repetition * fnames.size(); //only one pulse at the start
 	}
+	else { //for multiplexing, period = total_frame
+		period = total_frames;
+	}
+	CString msg;
+	msg.Format(_T("Setting period = %d"), period);
+	MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+	//synch pulse sent out at the the very first frame through GPIO
+	ret = m_Projector.SequenceSynchGate(period, errorMessage);
+	if (ret != ALP_OK) {
+		MessageBox(*errorMessage, _T("Sequence SynchGate with Error"), MB_OK | MB_ICONINFORMATION);
+	}
+	if (m_MultiplexMode.GetCheck()) { //in multiplex mode, need to send 2nd synch pulse at the recording frame
+		ret = m_Projector.SetSynchGateMultiplex(errorMessage);
+	}
+
 	return ret;
+
+}
+
+const int CEasyProjDlg::InitializeSequenceProperties(CString* errorMessage)
+{
+	CProjector::CTimingEx timing; //default to 10 ms
+	timing.PictureTime = 10000;
+	timing.IlluminateTime = 10000;
+	int ret = m_Projector.SelectMaxBitnum(timing, errorMessage);
+
+	if (ALP_OK == ret)
+		ret = GetSequenceProperties(errorMessage);
+
+	return ret;
+
 }
 
 const int CEasyProjDlg::StoreImages(CString* errorMessage) {
@@ -600,6 +647,18 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 
 	int ret = ALP_OK;
 	int nImages = 0;
+
+	//check existing fnames and free all existing sequences
+	if (!fnames.empty()) {
+		fnames.clear();
+	}
+	if (!bitmap_pointers.empty()) {
+		FreeHeap();
+		bitmap_pointers.clear();
+	}
+
+	m_Projector.SequenceFree();
+
 	if (IDOK == dlg.DoModal())											// show file open dialog
 	{
 		CWaitCursor WaitCursor;
@@ -652,14 +711,18 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 	SetDlgItemInt(IDC_SET_RECORD_IDX, 1);
 	SetDlgItemInt(IDC_SET_REP, 100);
 	//bring out timing dialog
+	if (m_MultiplexMode.GetCheck())
+		m_mode = "Multiplex";
+	else 
+		m_mode = "Sequential";
+	
 	if (num_images > 0) {
-		CustomizeTimingDlg timing_dlg(num_images, fnames);
+		CustomizeTimingDlg timing_dlg(num_images, fnames, m_MultiplexMode.GetCheck());
 		if (timing_dlg.DoModal() == IDOK) {
 			this->timing_vals = timing_dlg.get_values();
 			record_idx = timing_dlg.get_record_index();
 			SetDlgItemInt(IDC_SET_RECORD_IDX, record_idx);
-			//ret = PostprocessImages();
-
+			SetRecordPreview();
 		}
 	}
 	UpdateData(false);
@@ -667,53 +730,198 @@ const int CEasyProjDlg::StoreImages(CString* errorMessage) {
 
 }
 
-Gdiplus::Bitmap& get_black_frame(int width, int height) {
-	// Create a Bitmap object with the desired width and height
-	Gdiplus::Bitmap blackImage(width, height, PixelFormat8bppIndexed);
-	return blackImage;
+
+
+void CEasyProjDlg::SetRecordPreview() {
+	CString fname = fnames[record_idx - 1];
+	Gdiplus::Bitmap BmpLoaded(fname);
+	Gdiplus::Status status;
+	// create a bitmap with preview dimensions
+	const int thumbWidth = 176;
+	const int thumbHeight = 132;
+	std::auto_ptr<Gdiplus::Bitmap> pThumbBmp(new Gdiplus::Bitmap(thumbWidth, thumbHeight, PixelFormat24bppRGB));
+	Gdiplus::Graphics thumbGraphics(pThumbBmp.get());	// connect the drawing area with preview
+
+	// draw BmpLoaded in the drawing area of the preview
+	status = thumbGraphics.DrawImage(&BmpLoaded, 0, 0, thumbWidth, thumbHeight);
+	HBITMAP hBmp = 0;
+	status = pThumbBmp->GetHBITMAP(Gdiplus::Color(0, 0, 0), &hBmp);	// get bitmap handle
+	m_PreviewRecord.SetBitmap(hBmp);	// draw the preview, dereference previous bitmap
+	DeleteObject(hBmp);
 }
 
-int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
-	total_frames = 0;
-	for (int i = 0; i < fnames.size(); ++i) {
-		total_frames += timing_vals[i][0]; //number of repeats
-		total_frames += timing_vals[i][1]; //number of repeats
-	}
-	//sequence allocation
-	int BitPlanes = 1;
-	int ret = 0;
-	ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
+//int CEasyProjDlg::PostprocessImagesMultiSequence(CString* errorMessage)
+//{
+//	//int start_seq_id = 0;
+//	int BitPlanes = 1;
+//	int ret = 0;
+//
+//	for (int i = 0; i < fnames.size(); ++i) {
+//		int total_frame_seq = 0;
+//		total_frame_seq += timing_vals[i][0]; //number of on frames
+//		total_frame_seq += timing_vals[i][1]; //number of black frames
+//		
+//		if (m_Projector.getAvailableSequence() > 0) {
+//			CString msg;
+//			msg.Format(_T("Collected in total %d frames, Available sequence: %d"), total_frames, m_Projector.getAvailableSequence());
+//			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+//
+//			ret = m_Projector.SequenceAlloc(BitPlanes, total_frame_seq * m_ColourComponents, errorMessage);
+//			MessageBox(*errorMessage, _T("Message after SequenceAlloc"), MB_OK | MB_ICONINFORMATION);
+//		}
+//		else {
+//			CString msg = _T("No Available Memory Inside Sequence Queue...");
+//			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+//			return 0;
+//		}
+//		
+//	}
+//	ret = AddImageToSequence(TRUE, errorMessage);
+//	//ret = AddImageBytesToSequenceV2(errorMessage);
+//	CString msg = _T("After add image bytes to sequence") + *errorMessage;
+//	MessageBox(msg, _T("Message after New Image Add"), MB_OK | MB_ICONINFORMATION);
+//
+//	return ret;
+//}
+
+//newly added, add non-black & black frames to alp sequences, faster
+int CEasyProjDlg::AddImageToSequenceV2(BOOL multisequence, int repeats, CString* errorMessage) {
 	Gdiplus::Status status;
+	int ret = 0;
 
-	Gdiplus::Bitmap black_frame(L"\\.psf\\Home\\Desktop\\Desktop-jq\\Retinal\\images\\black_img.bmp");
+	//Gdiplus::Bitmap black_frame(L"\\.psf\\Home\\Desktop\\Desktop-jq\\Retinal\\images\\black_img.bmp");
+	Gdiplus::Bitmap black_frame(L"C:\\Users\\vision\\Desktop\\alp-test\\black_img.bmp");
 
-	for (int i = 0; i < fnames.size(); ++i) {
+	//------------------------Black Frame ------------------------------------------------
+
+	std::auto_ptr<Gdiplus::Bitmap> pProjBmpBlack(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+	Gdiplus::Graphics projGraphicsBlack(pProjBmpBlack.get());
+
+	if (black_frame.GetWidth() == pProjBmpBlack->GetWidth()
+		&& black_frame.GetHeight() == pProjBmpBlack->GetHeight())
+	{
+		// resize not necessary -> clone the bitmap
+		pProjBmpBlack.reset(black_frame.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+	}
+	else
+	{
+		// draw bitmap into the drawing area of the sequence image, resize
+		status = projGraphicsBlack.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+	}
+
+
+	// lock RGB image for read access
+	Gdiplus::Rect lockRect(0, 0, pProjBmpBlack->GetWidth(), pProjBmpBlack->GetHeight());
+	// lock 8bpp sequence image for write access
+	Gdiplus::BitmapData bitmapData8bppBlack;		// image data
+	pProjBmpBlack->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bppBlack);
+
+	BYTE* pImageData8bppBlack = static_cast<BYTE*>(bitmapData8bppBlack.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+
+	for (size_t y = 0; y < pProjBmpBlack->GetHeight(); y++)
+	{
+		memset(pImageData8bppBlack, 0, pProjBmpBlack->GetWidth());  // Set each row to black				}
+		pImageData8bppBlack += bitmapData8bppBlack.Stride;				// set pointer to the first pixel of the next line
+	}
+
+	pImageData8bppBlack = static_cast<BYTE*>(bitmapData8bppBlack.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
+
+	//------------------------------END of Black Frame---------------------------------
+
+	for (int i = 0; i < fnames.size(); ++i) { //i is the sequenceID
 		int on_frames = timing_vals[i][0]; //number of repeats
 		int black_frames = timing_vals[i][1]; //number of repeats
 		Gdiplus::Bitmap BmpLoaded(fnames[i]);
 
-		if (i + 1 == record_idx) {
-			// create a bitmap with preview dimensions
-			const int thumbWidth = 176;
-			const int thumbHeight = 132;
-			std::auto_ptr<Gdiplus::Bitmap> pThumbBmp(new Gdiplus::Bitmap(thumbWidth, thumbHeight, PixelFormat24bppRGB));
-			Gdiplus::Graphics thumbGraphics(pThumbBmp.get());	// connect the drawing area with preview
+		//-----------------------Copying Image Frame -----------------------------------------
+		std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+		Gdiplus::Graphics projGraphics(pProjBmp.get());
+		std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+		Gdiplus::BitmapData bitmapData8bpp;		// image data
+		Gdiplus::BitmapData bitmapDataProj;		// image data
 
-			// draw BmpLoaded in the drawing area of the preview
-			status = thumbGraphics.DrawImage(&BmpLoaded, 0, 0, thumbWidth, thumbHeight);
-			HBITMAP hBmp = 0;
-			status = pThumbBmp->GetHBITMAP(Gdiplus::Color(0, 0, 0), &hBmp);	// get bitmap handle
-			m_PreviewRecord.SetBitmap(hBmp);	// draw the preview, dereference previous bitmap
-			DeleteObject(hBmp);
+		// create a 8bpp-sequence-image as bitmap with projector dimensions
+		if (BmpLoaded.GetWidth() == pProjBmp->GetWidth()
+			&& BmpLoaded.GetHeight() == pProjBmp->GetHeight())
+		{
+			// resize not necessary -> clone the bitmap
+			pProjBmp.reset(BmpLoaded.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
 		}
+
+		else
+		{
+			// draw bitmap into the drawing area of the sequence image, resize
+			status = projGraphics.DrawImage(&BmpLoaded, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+		}
+
+		// lock RGB image for read access
+		Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
+		pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat24bppRGB, &bitmapDataProj);
+
+		// lock 8bpp sequence image for write access
+		pSeqImageBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
+
+		BYTE* pImageDataProj = static_cast<BYTE*>(bitmapDataProj.Scan0);	// pointer to the first pixel of the first line (RGB image: source)
+		BYTE* pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+
+
+		for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
+		{
+			for (size_t x = 0; x < pProjBmp->GetWidth(); x++)
+			{
+				pImageData8bpp[x] = (pImageDataProj[x * 3]		// B
+					+ pImageDataProj[x * 3 + 1]	// G
+					+ pImageDataProj[x * 3 + 2]	// R
+					) / 3;
+			}
+			pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
+			pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
+
+		}
+
+		pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
+
+		// --------------------------- END of Image Frame ------------------------------
+
+		for (int k = 0; k < repeats; ++k) {
+			for (int j = 0; j < on_frames; ++j) {
+				ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);	
+			}
+			for (int j = 0; j < black_frames; ++j) {
+				ret = m_Projector.AddImage(pImageData8bppBlack, pProjBmpBlack->GetWidth(), pProjBmpBlack->GetHeight(), errorMessage);	
+			}
+		}
+		status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
+		status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
+	}
+	status = pProjBmpBlack->UnlockBits(&bitmapData8bppBlack);
+
+	return ret;
+}
+
+//newly added, add non-black & black frames to alp sequences
+int CEasyProjDlg::AddImageToSequence(BOOL multisequence, CString* errorMessage) {
+	Gdiplus::Status status;
+	int ret;
+
+	//Gdiplus::Bitmap black_frame(L"\\.psf\\Home\\Desktop\\Desktop-jq\\Retinal\\images\\black_img.bmp");
+	Gdiplus::Bitmap black_frame(L"C:\\Users\\vision\\Desktop\\alp-test\\black_img.bmp");
+
+	for (int i = 0; i < fnames.size(); ++i) { //i is the sequenceID
+		int on_frames = timing_vals[i][0]; //number of repeats
+		int black_frames = timing_vals[i][1]; //number of repeats
+		Gdiplus::Bitmap BmpLoaded(fnames[i]);
 
 		for (int j = 0; j < on_frames; ++j) {
 			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
 			Gdiplus::Graphics projGraphics(pProjBmp.get());
+			std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+			Gdiplus::BitmapData bitmapData8bpp;		// image data
+			Gdiplus::BitmapData bitmapDataProj;		// image data
+
 			for (int splitPicNum = 0; splitPicNum < m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
 			{
 				// create a 8bpp-sequence-image as bitmap with projector dimensions
-				std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
 
 				int x = BmpLoaded.GetWidth();
 				int y = BmpLoaded.GetHeight();
@@ -724,7 +932,7 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 					// resize not necessary -> clone the bitmap
 					pProjBmp.reset(BmpLoaded.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
 				}
-				
+
 				else
 				{
 					// draw bitmap into the drawing area of the sequence image, resize
@@ -737,17 +945,15 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 
 				// lock RGB image for read access
 				Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
-				Gdiplus::BitmapData bitmapDataProj;		// image data
 				pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat24bppRGB, &bitmapDataProj);
 
 				// lock 8bpp sequence image for write access
-				Gdiplus::BitmapData bitmapData8bpp;		// image data
 				pSeqImageBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
 
 				BYTE* pImageDataProj = static_cast<BYTE*>(bitmapDataProj.Scan0);	// pointer to the first pixel of the first line (RGB image: source)
 				BYTE* pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
 
-				
+
 				for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
 				{
 					for (size_t x = 0; x < pProjBmp->GetWidth(); x++)
@@ -759,17 +965,36 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 					}
 					pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
 					pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
-	
+
 				}
 
 				pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-				ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
 
+
+
+				if (!multisequence) {
+					ret = m_Projector.AddImage(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+					//CString msg;
+					//if (ret == 1)
+					//	msg.Format(_T("Added image %d %d to sequence 0"), i, j);
+					//else
+					//	msg.Format(_T("Added image %d %d to sequence 0 failed....???????"), i, j);
+
+					//MessageBox(msg, _T("Multiplex AddImage Notification"), MB_OK | MB_ICONINFORMATION);
+				}
+				else {
+					BOOL restart = (j == 0);
+					ret = m_Projector.AddImageToSequence(pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), i, restart, errorMessage);
+					//CString msg;
+					//if (ret == 1)
+					//	msg.Format(_T("Added image %d to sequence %d succeeded"), j, i);
+					//else
+					//	msg.Format(_T("Added image %d to sequence %d failed....???????"), j, i);
+
+					//MessageBox(msg, _T("Sequence Mode AddImage Notification"), MB_OK | MB_ICONINFORMATION);
+				}
 				status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
 				status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
-
-				if (ALP_OK != ret)
-					return ret;
 			}
 		}
 
@@ -780,200 +1005,288 @@ int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
 			for (int splitPicNum = 0; splitPicNum < m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
 			{
 
-			if (black_frame.GetWidth() == pProjBmp->GetWidth()
-				&& black_frame.GetHeight() == pProjBmp->GetHeight())
-			{
-				// resize not necessary -> clone the bitmap
-				pProjBmp.reset(black_frame.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
-			}
-			else
-			{
-				// draw bitmap into the drawing area of the sequence image, resize
-				status = projGraphics.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
-			}
-
-			
-			// lock RGB image for read access
-			Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
-			// lock 8bpp sequence image for write access
-			Gdiplus::BitmapData bitmapData8bpp;		// image data
-			pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
-
-			BYTE* pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
-
-			for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
-			{
-				memset(pImageData8bpp, 0, pProjBmp->GetWidth());  // Set each row to black				}
-				pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
-			}
-
-			pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-			ret = m_Projector.AddImage(pImageData8bpp, pProjBmp->GetWidth(), pProjBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
-
-			status = pProjBmp->UnlockBits(&bitmapData8bpp);	// lock end
-			//status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
-
-			if (ALP_OK != ret)
-				return ret;
-			}
-		}
-	}
-	
-	return ret;
-	
-
-}
-
-// load images and add it to a sequence
-const int CEasyProjDlg::LoadSequence(CString *errorMessage)
-{
-	const LPCTSTR filter =
-		_T("All Image Files|*.tif;*.tiff;*.png;*.gif;*.bmp;*.jpg;*.jpeg|")
-		_T("TIF Files for Sequence (*.tif)|*.tif|")
-		_T("TIFF Files for Sequence (*.tiff)|*.tiff|");
-	CFileDialog dlg( TRUE, NULL, 0, OFN_PATHMUSTEXIST|OFN_ALLOWMULTISELECT|OFN_EXPLORER|OFN_NOCHANGEDIR|OFN_FILEMUSTEXIST|OFN_ENABLESIZING, filter);
-
-	wchar_t buffer[1<<16];
-	*buffer = '\0';
-
-	dlg.m_pOFN->lpstrFile	= buffer;
-	dlg.m_pOFN->nMaxFile	= sizeof(buffer)/sizeof(*buffer);
-
-	int ret = ALP_OK;
-	int nImages = 0;
-
-	if(IDOK == dlg.DoModal())											// show file open dialog
-	{
-		CWaitCursor WaitCursor; 
-
-		// determine the sequence length
-		for(POSITION pos = dlg.GetStartPosition(); NULL!=pos; )
-		{
-			CString fileNameLOAD = dlg.GetNextPathName(pos);
-			nImages ++;
-		}
-
-
-		const int BitPlanes = 1;									// use all bitplanes for projection
-		ret = m_Projector.SequenceAlloc( BitPlanes, nImages*m_ColourComponents, errorMessage);		// create a sequence
-		if( ALP_OK != ret)
-			return ret;
-
-		// read images from file, convert it and put it to the projector
-		Gdiplus::Status status;
-		int k = 0;	
-		for(POSITION pos = dlg.GetStartPosition(); NULL!=pos; )
-		{
-			CString fileNameLOAD = dlg.GetNextPathName(pos);
-
-			Gdiplus::Bitmap BmpLoaded( fileNameLOAD);			// read the image from file
-
-			{	// Show progress and preview thumbnail
-				m_SequenceLoadedImages.Format( _T("%d"), k+1);	// update dialog element with current image counter
-
-				// create a bitmap with preview dimensions
-				const int thumbWidth = 176;
-				const int thumbHeight = 132;
-				std::auto_ptr<Gdiplus::Bitmap> pThumbBmp(new Gdiplus::Bitmap( thumbWidth, thumbHeight, PixelFormat24bppRGB));
-				Gdiplus::Graphics thumbGraphics(pThumbBmp.get());	// connect the drawing area with preview
-
-				// draw BmpLoaded in the drawing area of the preview
-				status = thumbGraphics.DrawImage( &BmpLoaded, 0, 0, thumbWidth, thumbHeight);	
-				HBITMAP hBmp = 0;
-				status = pThumbBmp->GetHBITMAP( Gdiplus::Color(0,0,0), &hBmp);	// get bitmap handle
-				DeleteObject(m_Preview.SetBitmap( hBmp ));	// draw the preview, dereference previous bitmap
-				DeleteObject(hBmp);
-			}
-
-
-			// create a new bitmap with projector dimensions
-			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap( m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
-			Gdiplus::Graphics projGraphics( pProjBmp.get() );
-
-			for(int splitPicNum=0; splitPicNum<m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
-			{
-				// create a 8bpp-sequence-image as bitmap with projector dimensions
-				std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap( m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
-	
-				if( BmpLoaded.GetWidth() == pProjBmp->GetWidth()
-					&&	BmpLoaded.GetHeight() == pProjBmp->GetHeight())
+				if (black_frame.GetWidth() == pProjBmp->GetWidth()
+					&& black_frame.GetHeight() == pProjBmp->GetHeight())
 				{
 					// resize not necessary -> clone the bitmap
-					pProjBmp.reset(BmpLoaded.Clone( 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+					pProjBmp.reset(black_frame.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
 				}
 				else
 				{
 					// draw bitmap into the drawing area of the sequence image, resize
-					status = projGraphics.DrawImage( &BmpLoaded, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+					status = projGraphics.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
 				}
 
-				if( pProjBmp->GetWidth() != pSeqImageBmp->GetWidth()
-					||	pProjBmp->GetHeight() != pSeqImageBmp->GetHeight())
-					break;
 
 				// lock RGB image for read access
-				Gdiplus::Rect lockRect( 0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());	
-				Gdiplus::BitmapData bitmapDataProj;		// image data
-				pProjBmp->LockBits( &lockRect, Gdiplus::ImageLockModeWrite, PixelFormat24bppRGB, &bitmapDataProj);
-
+				Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
 				// lock 8bpp sequence image for write access
 				Gdiplus::BitmapData bitmapData8bpp;		// image data
-				pSeqImageBmp->LockBits( &lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
+				pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
 
-				BYTE *pImageDataProj = static_cast<BYTE*>(bitmapDataProj.Scan0);	// pointer to the first pixel of the first line (RGB image: source)
-				BYTE *pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+				BYTE* pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
 
-				// transform pixel wise: RGB -> 8bpp
-				if(3 == m_ColourComponents)						// RGB picture
+				for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
 				{
-					// Byte-order of color components: B,G,R
-					// see also GdiPlusPixelFormats: BLUE_SHIFT=0, GREEN_SHIFT=8, RED_SHIFT=16
-					int const nColorIndex = 2-splitPicNum;
-					for( size_t y=0; y < pProjBmp->GetHeight(); y++)
-					{
-						for( size_t x=0; x < pProjBmp->GetWidth(); x++)
-						{
-							pImageData8bpp[x] =	( pImageDataProj[ x*3 + nColorIndex]);
-						}
-						pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
-						pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
-					}
-				} else
-				{	// monochrome
-					for( size_t y=0; y < pProjBmp->GetHeight(); y++)
-					{
-						for( size_t x=0; x < pProjBmp->GetWidth(); x++)
-						{
-							pImageData8bpp[x] =	( pImageDataProj[ x*3]		// B
-												+ pImageDataProj[ x*3+1]	// G
-												+ pImageDataProj[ x*3+2]	// R
-												) / 3;
-						}
-						pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
-						pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
-					}
+					memset(pImageData8bpp, 0, pProjBmp->GetWidth());  // Set each row to black				}
+					pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
 				}
 
 				pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
-				ret = m_Projector.AddImage( pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+				if (!multisequence) {
+					ret = m_Projector.AddImage(pImageData8bpp, pProjBmp->GetWidth(), pProjBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+					/*CString msg;
+					if (ret == 1)
+						msg.Format(_T("Added black image %d %d to sequence 0"), i, j);
+					else
+						msg.Format(_T("Added black image %d %d to sequence 0 failed....???????"), i, j);
 
-				status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
-				status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
+					MessageBox(msg, _T("Multiplex AddImage Notification"), MB_OK | MB_ICONINFORMATION);*/
+				}
+				else {
+					ret = m_Projector.AddImageToSequence(pImageData8bpp, pProjBmp->GetWidth(), pProjBmp->GetHeight(), i, FALSE, errorMessage);
+					//CString msg;
+					//if (ret == 1)
+					//	msg.Format(_T("Added black image % d to sequence % d"), j, i);
+					//else
+					//	msg.Format(_T("Added black image %d to sequence %d failed....???????"), j, i);
 
-				if( ALP_OK != ret)
-					return ret;
+					//MessageBox(msg, _T("Sequence Mode AddImage black Notification"), MB_OK | MB_ICONINFORMATION);
+				}
+				status = pProjBmp->UnlockBits(&bitmapData8bpp);	// lock end
+
 			}
-
-			k++;
 		}
 	}
-	num_images = nImages;
-	SetDlgItemInt(IDC_SET_MULTIPLEX, num_images);
-	SetDlgItemInt(IDC_SET_RECORD_IDX, 1);
-	SetDlgItemInt(IDC_SET_REP, 100);
-	UpdateData(false);
+
 	return ret;
 }
+
+
+//BYTE* get_byte_data(CString fname) {
+//	std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap(m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+//	Gdiplus::Graphics projGraphics(pProjBmp.get());
+//	// lock 8bpp sequence image for write access
+//	Gdiplus::BitmapData bitmapData8bpp;		// image data
+//	BYTE* pImageData8bpp;
+//	for (int splitPicNum = 0; splitPicNum < m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
+//	{
+//		if (black_frame.GetWidth() == pProjBmp->GetWidth()
+//			&& black_frame.GetHeight() == pProjBmp->GetHeight())
+//		{
+//			// resize not necessary -> clone the bitmap
+//			pProjBmp.reset(black_frame.Clone(0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+//		}
+//		else
+//		{
+//			// draw bitmap into the drawing area of the sequence image, resize
+//			status = projGraphics.DrawImage(&black_frame, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+//		}
+//
+//
+//		// lock RGB image for read access
+//		Gdiplus::Rect lockRect(0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());
+//		
+//		pProjBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
+//
+//		pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+//
+//		for (size_t y = 0; y < pProjBmp->GetHeight(); y++)
+//		{
+//			memset(pImageData8bpp, 0, pProjBmp->GetWidth());  // Set each row to black				}
+//			pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
+//		}
+//
+//		pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
+//	}
+//	return pImageData8bpp;
+//}
+
+
+
+
+//for multiplex mode and sequence too
+int CEasyProjDlg::PostprocessImages(CString *errorMessage) {
+	total_frames = 0;
+	for (int i = 0; i < fnames.size(); ++i) {
+		total_frames += timing_vals[i][0]; //number of on frames
+		total_frames += timing_vals[i][1]; //number of black frames
+	}
+	//sequence allocation
+	int BitPlanes = 1;
+	int ret = 0;
+	CString msg;
+	msg.Format(_T("Collected in total %d frames in Multiplexing Mode"), total_frames);
+	MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+	int repeats = GetDlgItemInt(IDC_SET_REP);
+	if (m_SeqMode.GetCheck()) {
+		total_frames *= repeats;
+	}
+	ret = m_Projector.SequenceAlloc(BitPlanes, total_frames * m_ColourComponents, errorMessage);		// create a sequence
+	if (ret == ALP_OK) {
+		CString msg;
+		msg.Format(_T("Sequence Allocated for %d"), total_frames);
+		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+	}
+
+	ret = AddImageToSequenceV2(FALSE, repeats, errorMessage);
+	return ret;
+	
+
+}
+
+
+
+// load images and add it to a sequence
+//const int CEasyProjDlg::LoadSequence(CString *errorMessage)
+//{
+//	const LPCTSTR filter =
+//		_T("All Image Files|*.tif;*.tiff;*.png;*.gif;*.bmp;*.jpg;*.jpeg|")
+//		_T("TIF Files for Sequence (*.tif)|*.tif|")
+//		_T("TIFF Files for Sequence (*.tiff)|*.tiff|");
+//	CFileDialog dlg( TRUE, NULL, 0, OFN_PATHMUSTEXIST|OFN_ALLOWMULTISELECT|OFN_EXPLORER|OFN_NOCHANGEDIR|OFN_FILEMUSTEXIST|OFN_ENABLESIZING, filter);
+//
+//	wchar_t buffer[1<<16];
+//	*buffer = '\0';
+//
+//	dlg.m_pOFN->lpstrFile	= buffer;
+//	dlg.m_pOFN->nMaxFile	= sizeof(buffer)/sizeof(*buffer);
+//
+//	int ret = ALP_OK;
+//	int nImages = 0;
+//
+//	if(IDOK == dlg.DoModal())											// show file open dialog
+//	{
+//		CWaitCursor WaitCursor; 
+//
+//		// determine the sequence length
+//		for(POSITION pos = dlg.GetStartPosition(); NULL!=pos; )
+//		{
+//			CString fileNameLOAD = dlg.GetNextPathName(pos);
+//			nImages ++;
+//		}
+//
+//
+//		const int BitPlanes = 1;									// use all bitplanes for projection
+//		ret = m_Projector.SequenceAlloc( BitPlanes, nImages*m_ColourComponents, errorMessage);		// create a sequence
+//		if( ALP_OK != ret)
+//			return ret;
+//
+//		// read images from file, convert it and put it to the projector
+//		Gdiplus::Status status;
+//		int k = 0;	
+//		for(POSITION pos = dlg.GetStartPosition(); NULL!=pos; )
+//		{
+//			CString fileNameLOAD = dlg.GetNextPathName(pos);
+//
+//			Gdiplus::Bitmap BmpLoaded( fileNameLOAD);			// read the image from file
+//
+//			{	// Show progress and preview thumbnail
+//				m_SequenceLoadedImages.Format( _T("%d"), k+1);	// update dialog element with current image counter
+//
+//				// create a bitmap with preview dimensions
+//				const int thumbWidth = 176;
+//				const int thumbHeight = 132;
+//				std::auto_ptr<Gdiplus::Bitmap> pThumbBmp(new Gdiplus::Bitmap( thumbWidth, thumbHeight, PixelFormat24bppRGB));
+//				Gdiplus::Graphics thumbGraphics(pThumbBmp.get());	// connect the drawing area with preview
+//
+//				// draw BmpLoaded in the drawing area of the preview
+//				status = thumbGraphics.DrawImage( &BmpLoaded, 0, 0, thumbWidth, thumbHeight);	
+//				HBITMAP hBmp = 0;
+//				status = pThumbBmp->GetHBITMAP( Gdiplus::Color(0,0,0), &hBmp);	// get bitmap handle
+//				DeleteObject(m_Preview.SetBitmap( hBmp ));	// draw the preview, dereference previous bitmap
+//				DeleteObject(hBmp);
+//			}
+//
+//
+//			// create a new bitmap with projector dimensions
+//			std::auto_ptr<Gdiplus::Bitmap> pProjBmp(new Gdiplus::Bitmap( m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+//			Gdiplus::Graphics projGraphics( pProjBmp.get() );
+//
+//			for(int splitPicNum=0; splitPicNum<m_ColourComponents; splitPicNum++) // for RGB projection, a source-picture is splited in to three target-pictures 
+//			{
+//				// create a 8bpp-sequence-image as bitmap with projector dimensions
+//				std::auto_ptr<Gdiplus::Bitmap> pSeqImageBmp(new Gdiplus::Bitmap( m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat8bppIndexed));
+//	
+//				if( BmpLoaded.GetWidth() == pProjBmp->GetWidth()
+//					&&	BmpLoaded.GetHeight() == pProjBmp->GetHeight())
+//				{
+//					// resize not necessary -> clone the bitmap
+//					pProjBmp.reset(BmpLoaded.Clone( 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight(), PixelFormat24bppRGB));
+//				}
+//				else
+//				{
+//					// draw bitmap into the drawing area of the sequence image, resize
+//					status = projGraphics.DrawImage( &BmpLoaded, 0, 0, m_Projector.GetWidth(), m_Projector.GetHeight());
+//				}
+//
+//				if( pProjBmp->GetWidth() != pSeqImageBmp->GetWidth()
+//					||	pProjBmp->GetHeight() != pSeqImageBmp->GetHeight())
+//					break;
+//
+				// lock RGB image for read access
+				//Gdiplus::Rect lockRect( 0, 0, pProjBmp->GetWidth(), pProjBmp->GetHeight());	
+				//Gdiplus::BitmapData bitmapDataProj;		// image data
+				//pProjBmp->LockBits( &lockRect, Gdiplus::ImageLockModeWrite, PixelFormat24bppRGB, &bitmapDataProj);
+
+				//// lock 8bpp sequence image for write access
+				//Gdiplus::BitmapData bitmapData8bpp;		// image data
+				//pSeqImageBmp->LockBits( &lockRect, Gdiplus::ImageLockModeWrite, PixelFormat8bppIndexed, &bitmapData8bpp);
+
+				//BYTE *pImageDataProj = static_cast<BYTE*>(bitmapDataProj.Scan0);	// pointer to the first pixel of the first line (RGB image: source)
+				//BYTE *pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// pointer to the first pixel of the first line (8bpp image: target)
+
+//				// transform pixel wise: RGB -> 8bpp
+//				if(3 == m_ColourComponents)						// RGB picture
+//				{
+//					// Byte-order of color components: B,G,R
+//					// see also GdiPlusPixelFormats: BLUE_SHIFT=0, GREEN_SHIFT=8, RED_SHIFT=16
+//					int const nColorIndex = 2-splitPicNum;
+//					for( size_t y=0; y < pProjBmp->GetHeight(); y++)
+//					{
+//						for( size_t x=0; x < pProjBmp->GetWidth(); x++)
+//						{
+//							pImageData8bpp[x] =	( pImageDataProj[ x*3 + nColorIndex]);
+//						}
+//						pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
+//						pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
+//					}
+//				} else
+//				{	// monochrome
+//					for( size_t y=0; y < pProjBmp->GetHeight(); y++)
+//					{
+//						for( size_t x=0; x < pProjBmp->GetWidth(); x++)
+//						{
+//							pImageData8bpp[x] =	( pImageDataProj[ x*3]		// B
+//												+ pImageDataProj[ x*3+1]	// G
+//												+ pImageDataProj[ x*3+2]	// R
+//												) / 3;
+//						}
+//						pImageDataProj += bitmapDataProj.Stride;				// set pointer to the first pixel of the next line
+//						pImageData8bpp += bitmapData8bpp.Stride;				// set pointer to the first pixel of the next line
+//					}
+//				}
+//
+//				pImageData8bpp = static_cast<BYTE*>(bitmapData8bpp.Scan0);	// set pointer back to the first pixel of the first line (RGB image: source)
+//				ret = m_Projector.AddImage( pImageData8bpp, pSeqImageBmp->GetWidth(), pSeqImageBmp->GetHeight(), errorMessage);		// upload image to the projector an add to sequence
+//
+//				status = pProjBmp->UnlockBits(&bitmapDataProj);	// lock end
+//				status = pSeqImageBmp->UnlockBits(&bitmapData8bpp);	// lock end
+//
+//				if( ALP_OK != ret)
+//					return ret;
+//			}
+//
+//			k++;
+//		}
+//	}
+//	num_images = nImages;
+//	SetDlgItemInt(IDC_SET_MULTIPLEX, num_images);
+//	SetDlgItemInt(IDC_SET_RECORD_IDX, 1);
+//	SetDlgItemInt(IDC_SET_REP, 0); //default to infinite repetition
+//	UpdateData(false);
+//	return ret;
+//}
 
 CString &CEasyProjDlg::LedTemperature(int nIndex)
 {
@@ -1145,13 +1458,22 @@ void CEasyProjDlg::OnBnClickedSeqLoad()
 	}
 	//int ret = LoadSequence(&exErrorMessage);
 	int ret = StoreImages(&exErrorMessage);
+	//BOOL ok = AddImageBytePointers(&exErrorMessage);
+
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 	
-	ret = GetSequenceProperties(&exErrorMessage);
+	//ret = GetSequenceProperties(&exErrorMessage);
+
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 	
 	UpdateElements();													// update all dialog elements from data
 }
+
+//void CEasyProjDlg::FreeHeap() {
+//	for (int i = 0; i < bitmap_pointers.size(); ++i) {
+//		bitmap_pointers[i].reset();
+//	}
+//}
 
 
 void CEasyProjDlg::OnBnClickedSeqFree()
@@ -1159,34 +1481,114 @@ void CEasyProjDlg::OnBnClickedSeqFree()
 	CString exErrorMessage;
 	
 	int ret = FreeSequence(&exErrorMessage);
+
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 
 	UpdateElements();													// update all dialog elements from data
 }
 
+BOOL check_timing(std::vector<std::vector<int>> timings) {
+	const auto& firstPair = timings[0]; // Take the first pair for comparison.
+	for (const auto& pair : timings) {
+		if (pair != firstPair) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+void CEasyProjDlg::OnBnClickedSetSeqParamTest() {
+	int ret = 0;
+	UpdateData(TRUE);
+	CString exErrorMessage;
+	ret = m_Projector.SetMasterControl(&exErrorMessage); // set master control
+	SetProjectorReturnCodeMsg(ret, WARNING, exErrorMessage);
+	if (ret != ALP_OK) {
+		CString msg = _T("In setseqparam, return error");
+		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+	}
+
+	int num_test = 10;
+
+	ret = m_Projector.SequenceAlloc(1, num_test * 2 * m_ColourComponents, &exErrorMessage);
+
+	for (int i = 0; i < image_bytes.size(); ++i) {
+		for (int j = 0; j < num_test; ++j) {
+			ret = m_Projector.AddImage(image_bytes[i], m_Projector.GetWidth(), m_Projector.GetHeight());
+		}
+		if (ret != ALP_OK) {
+			CString msg = _T("Add image using pointers failed");
+			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		}
+	}
+
+	CString msg = _T("Allocated Sequence, added 10 images...");
+	MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+
+	ret = SetSequenceProperties(&exErrorMessage); //do this after allocating all sequences
+
+	if (ALP_OK == ret)
+		ret = GetSequenceProperties(&exErrorMessage);
+
+}
 
 void CEasyProjDlg::OnBnClickedSetSeqParam()
 {
+	UpdateData(TRUE);
 	CString exErrorMessage;	
-	// set master control
-	int ret = m_Projector.SetMasterControl(&exErrorMessage);
-	ret = SetSequenceProperties(&exErrorMessage);
+	int ret = m_Projector.SetMasterControl(&exErrorMessage); // set master control
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 	if (ret != ALP_OK) {
 		CString msg = _T("In setseqparam, return error");
 		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
 	}
 
-	// In case of a running projection the changes gets effective even after Stop/Start of the projection.
-	if( ALP_OK == ret
-	&&	m_Projector.IsProjection())
-	{
-		ret = m_Projector.ProjStop(&exErrorMessage);
-		SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
-
-		ret = m_Projector.ProjStartContinuous(&exErrorMessage);
-		SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
+	//always need to free existing sequence and do postprocessing if already allocate sequences, if no sequence has allocated then no need to re-do
+	if (m_Projector.getNumSequence() > 0) {
+		exErrorMessage = "";
+		ret = m_Projector.SequenceFree(&exErrorMessage); //in case need to change setting
+		int seq_id = m_Projector.getSequenceID();
+		if (ret != ALP_OK && exErrorMessage != "") {
+			CString msg;
+			msg.Format(_T("Sequence Freeing Exists with Error. Seq ID: %d"), seq_id);
+			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONERROR);
+		}
+		else {
+			CString msg;
+			msg.Format(_T("Finished Freeing Existing Sequences. Seq ID: %d"), seq_id);
+			MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		}
 	}
+	else {
+		CString msg;
+		msg.Format(_T("m_projector has 0 sequence currently, m_SequenceID %d"), m_Projector.getSequenceID());
+		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONERROR);
+	}
+
+	//if (m_MultiplexMode.GetCheck())
+	ret = PostprocessImages(&exErrorMessage);
+	//else if (m_SeqMode.GetCheck()) {
+		//double check timing vals
+		//if (!check_timing(timing_vals)) {
+		//	CString msg = _T("Please make sure all sequences have the same frame numbers");
+		//	MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		//	return;
+		//}
+		///ret = PostprocessImagesMultiSequence(&exErrorMessage);
+	//}
+	ret = SetSequenceProperties(&exErrorMessage); //do this after allocating all sequences
+
+	// In case of a running projection the changes gets effective even after Stop/Start of the projection.
+	//if( ALP_OK == ret &&	m_Projector.IsProjection())
+	//{
+	//	ret = m_Projector.ProjStop(&exErrorMessage);
+	//	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
+	//	if (m_MultiplexMode.GetCheck())
+	//		ret = m_Projector.ProjStartContinuous(&exErrorMessage);
+	//	else
+	//		ret = m_Projector.ProjStartSequential(&exErrorMessage);
+	//	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
+	//}
 
 	// After successful timing setup, report effective settings. These values could
 	// differ from input in case of inconsistent parameters or ALP_DEFAULT.
@@ -1206,9 +1608,35 @@ void CEasyProjDlg::OnBnClickedProjStart()
 {
 	CString exErrorMessage;
 	CString msg;
+	int ret;
+	int seq_id = m_Projector.getSequenceID();
+	if (seq_id != 0 && !timing_vals.empty() && timing_vals.size() == fnames.size()) {
+		//user forgot to press 'set'
+		OnBnClickedSetSeqParam();
+	}
+	else if (seq_id == 0) {
+		CString msg = _T("Please restart program..");
+		MessageBox(msg, _T("Error"), MB_OK | MB_ICONERROR);
+		return;
+	}
 
-	int ret = m_Projector.ProjStartContinuous(&exErrorMessage);
-
+	//check if runs in sequence mode or multiplex mode
+	if (m_MultiplexMode.GetCheck()) {
+		CString msg = _T("It's Multiplex Mode, Projects infinitely...");
+		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		ret = m_Projector.ProjStartContinuous(&exErrorMessage);
+		if (exErrorMessage != "")
+			MessageBox(exErrorMessage, _T("Error Message Notification"), MB_OK | MB_ICONINFORMATION);
+	}
+	else {
+		int num_seq = m_Projector.getNumSequence();
+		CString msg;
+		msg.Format(_T("It's Sequential Mode, Projects infinitely..."), num_seq);
+		MessageBox(msg, _T("Notification"), MB_OK | MB_ICONINFORMATION);
+		ret = m_Projector.ProjStartContinuous(&exErrorMessage);
+		if (exErrorMessage != "")
+			MessageBox(exErrorMessage, _T("Message after ProjStartSequential Notification"), MB_OK | MB_ICONINFORMATION);
+	}
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 	
 	UpdateElements();													// update all dialog elements from data
@@ -1220,6 +1648,10 @@ void CEasyProjDlg::OnBnClickedProjStop()
 	CString exErrorMessage;	
 
 	int ret = m_Projector.ProjStop(&exErrorMessage);
+	if (ret == ALP_OK) {
+		CString msg = _T("Projection Stopped, Sequences Freed, Please press set and projection to restart");
+		SetDlgItemText(IDC_ERROR_MSG, msg);
+	}
 	SetProjectorReturnCodeMsg( ret, WARNING, exErrorMessage);
 	
 	UpdateElements();													// update all dialog elements from data

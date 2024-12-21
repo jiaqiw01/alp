@@ -5,7 +5,8 @@
 
 // include header for ViALUX ALP
 #include "../inc/alp.h"
-
+#include "alp_ext_dyn_synch_out.h"
+#include <vector>
 // possible modifications:
 // /D USE_TRIGGER_DELAY (applicable only in ALP_SLAVE_MODE)
 
@@ -65,10 +66,10 @@ public:
 
 		CTimingEx()
 		{	// Initialization
-			IlluminateTime	= 0;
-			PictureTime		= 0;
+			IlluminateTime	= ALP_DEFAULT;
+			PictureTime		= ALP_DEFAULT;
 			SynchDelay	= 0;
-			SynchPulseWidth = ALP_DEFAULT;
+			SynchPulseWidth = 0;
 			TriggerInDelay = 0;
 			BitNum = 1;
 			Uninterrupted = true;
@@ -171,10 +172,16 @@ public:
 	// change control mode
 	int SetMasterControl(CString* errorMessage = NULL);
 	int SetSlaveControl(CString* errorMessage = NULL);
+	int SequenceSynchGate(int period, CString* errorMessage);
 	// set repetitions
 	int SetReps(int reps, CString* errorMessage = NULL);
 	// set number of multiplex and record_idx
 	void SetMultiplexRecord(long num_multiplex, long record_idx);
+	int AddImageToSequence(BYTE* pImageData, const int width, const int height, int sequenceID, BOOL restart, CString* errorMessage = NULL);
+	void AddSequence();
+	int getAvailableSequence();
+	int getNumSequence() { return sequenceID_vector.size(); }
+	int getSequenceID() { return m_SequenceID;  }
 	// free the projector
 	int Free(CString *errorMessage = NULL);
 	// true, if the projector was successfully initialized
@@ -206,6 +213,7 @@ public:
 	int AddImage(BYTE *pImageData, const int width, const int height, CString *errorMessage = NULL);
 	// start the continously projection of the sequence
 	int ProjStartContinuous(CString *errorMessage = NULL);
+	int ProjStartSequential(CString* errorMessage = NULL);
 	// set synch gates
 	int SetSynchGateMultiplex(CString* errorMessage = NULL);
 	// Is the projection running!
@@ -241,6 +249,9 @@ private:
 	unsigned long m_ProjectorType;
 	// sequence ID
 	unsigned long m_SequenceID;
+
+	std::vector<unsigned long> sequenceID_vector;
+
 	// image index
 	unsigned long m_ImageIdx;
 	// dimensions ot the DMD

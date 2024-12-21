@@ -104,6 +104,8 @@
     <None Include="res\EasyProj.rc2" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="alp_ext_dyn_synch_out.h" />
+    <ClInclude Include="CustomizeTimingDlg.h" />
     <ClInclude Include="Projector.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="EasyProj.h" />
@@ -112,6 +114,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CustomizeTimingDlg.cpp" />
     <ClCompile Include="Projector.cpp" />
     <ClCompile Include="EasyProj.cpp" />
     <ClCompile Include="EasyProjDlg.cpp" />

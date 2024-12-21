@@ -6,19 +6,25 @@
 
 #include "Projector.h"	// include the projector class
 #include "afxwin.h"
-
 #include "PlusGdi.h"	// GDI+
 #include "afxcmn.h"
 #include <vector>
+#include <memory>
 
 // CEasyProjDlg dialog
 class CEasyProjDlg : public CDialogEx
 {
 private:
 	CProjector	m_Projector;	// instance of the projector
-	long m_ColourComponents;	// for STAR-07 RGB, each picture is decomposed to 3 colour components; otherwise display is monochrome (1 colour component)
+	long m_ColourComponents;
+	//int AddImageBytesToSequenceV2(CString* errorMessage);
+	//int AddImageToSequenceV2(BOOL multisequence, CString* errorMessage);
+	// for STAR-07 RGB, each picture is decomposed to 3 colour components; otherwise display is monochrome (1 colour component)
 	int PostprocessImages(CString *errorMessage = NULL);
-
+	//int PostprocessImagesMultiSequence(CString* errorMessage = NULL);
+	int AddImageToSequenceV2(BOOL multisequence, int repeats, CString* errorMessage);
+	void SetRecordPreview();
+	//std::vector<std::shared_ptr<Gdiplus::Bitmap>> bitmap_pointers;
 // Construction
 public:
 	CEasyProjDlg(CWnd* pParent = NULL);	// standard constructor
@@ -52,6 +58,9 @@ public:
 	CButton m_RadioBtnProjTypeVModule;
 	// int member (Radio button) for the projectortype
 	CButton m_EditSetting;
+	CButton m_MultiplexMode;
+	CButton m_SeqMode;
+	CString m_mode;
 	int m_iProjType;
 	int m_iMaster;
 	// CString member of the dialog element which shows the projector serial number
@@ -169,15 +178,19 @@ public:
 	// change the LED brightness
 	void SetLEDBrightness( const int iBrightness);
 	// -----
-	// free sequence and reset dialog elements
+	// free sequence and reset dialog elementsd
 	const int FreeSequence(CString *errorMessage = NULL);
 	// get sequence properties
 	const int GetSequenceProperties(CString *errorMessage = NULL);
 	// change sequence properties
 	const int SetSequenceProperties(CString *errorMessage = NULL);
+	const int InitializeSequenceProperties(CString* errorMessage = NULL);
 	// load images and add it to a sequence
+	int AddImageToSequence(BOOL multisequence, CString* errorMessage = NULL);
 	const int LoadSequence(CString *errorMessage = NULL);
 	const int StoreImages(CString* errorMessage = NULL);
+
+	void loadExistingSetting(CString* errorMessage = NULL);
 	// -----
 	// function for Led-temperature-inquiry
 	CString &LedTemperature(int Index);
@@ -191,9 +204,12 @@ public:
 	afx_msg void OnBnClickedRadioProjStar07RGB();
 	afx_msg void OnBnClickedRadioProjAlpOnly();
 	afx_msg void OnBnClickedSeqLoad();
+	void FreeHeap();
 	afx_msg void OnBnClickedSeqFree();
 	afx_msg void OnDestroy();
-	afx_msg void OnBnClickedSetSeqParam();
+	afx_msg
+		void OnBnClickedSetSeqParamTest();
+	void OnBnClickedSetSeqParam();
 	afx_msg void OnBnClickedProjStart();
 	afx_msg void OnBnClickedProjStop();
 	virtual void OnOK();
@@ -213,7 +229,7 @@ public:
 	virtual void WinHelp(DWORD dwData, UINT nCmd = HELP_CONTEXT);
 
 	//newly added
-	afx_msg void OnBnClickedCheckTiming();
+	afx_msg void OnBnClickedEditTiming();
 	afx_msg void OnBnClickedSetSlave();
 	//afx_msg void OnBnClickedSetNumRep();
 	//afx_msg void OnBnClickedSetMultiplex();

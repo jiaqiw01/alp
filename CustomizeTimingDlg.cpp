@@ -5,14 +5,14 @@
 //#include "EasyProjDlg.h"
 IMPLEMENT_DYNAMIC(CustomizeTimingDlg, CDialogEx);
 
-CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, CWnd* pParent)
-	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), fnames(fnames) {}
+CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, CWnd* pParent)
+	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), fnames(fnames), multiplex_mode(multiplex) {}
 
-CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, int record_idx, CWnd* pParent)
-	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), record_idx(record_idx), fnames(fnames) {}
+CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, int record_idx, CWnd* pParent)
+	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), record_idx(record_idx), fnames(fnames), multiplex_mode(multiplex){}
 
-CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, int record_idx, std::vector<std::vector<int>> timings, CWnd* pParent)
-	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), fnames(fnames), m_values(timings), record_idx(record_idx) {}
+CustomizeTimingDlg::CustomizeTimingDlg(int num_pic, std::vector<CString> fnames, BOOL multiplex, int record_idx, std::vector<std::vector<int>> timings, CWnd* pParent)
+	: CDialogEx(IDD_TIMING_DIALOG, pParent), num_pic(num_pic), fnames(fnames), m_values(timings), record_idx(record_idx), multiplex_mode(multiplex){}
 
 void CustomizeTimingDlg::DoDataExchange(CDataExchange* pDX) {
 	CDialogEx::DoDataExchange(pDX);
@@ -178,7 +178,7 @@ void CustomizeTimingDlg::OnOK() {
 			int controlID = IDC_TIMING_VALUE + row * num_pic + col;
 			// Check if GetDlgItemInt was unsuccessful and set default value
 			int value = GetDlgItemInt(controlID, &success);
-			if (!success || value <= 0) {
+			if (!success || value < 0) {
 				value = 1; // Default value
 				MessageBox(_T("Please enter all numbers..."), _T("Input Error"), MB_OK | MB_ICONWARNING);
 				return;
@@ -208,6 +208,16 @@ void CustomizeTimingDlg::OnOK() {
 		MessageBox(_T("No button is selected"), _T("Info"), MB_OK);
 		return;
 	}
+    //if sequential mode, need to make sure all sequence has the same light & dark frame, otherwise synch pulse is messed up
+	//if (!multiplex_mode) {
+	//	const auto& firstPair = m_values[0]; // Take the first pair for comparison.
+	//	for (const auto& pair : m_values) {
+	//		if (pair != firstPair) {
+	//			MessageBox(_T("!!!Please make sure all sequences have the same number of images!!!"), _T("Info"), MB_OK);
+	//			return; // Found a pair that is different.
+	//		}
+	//	}
+	//}
 
 	CDialogEx::OnOK();
 }
