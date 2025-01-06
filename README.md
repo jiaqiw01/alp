@@ -1,4 +1,4 @@
-ALP EasyProj Spec
+Document: https://docs.google.com/document/d/1WZRMCZCcDeq7lePxCiqcADXola2YHmroq0DYWtivh3I/edit?usp=sharing (see this for the most updated version :))
 # Overall workflow
 ![EasyProj ReadMe](https://github.com/user-attachments/assets/20e82a36-c0e2-403d-b620-a52259b6f70b)
 # Modes
