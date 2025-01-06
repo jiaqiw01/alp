@@ -22,7 +22,7 @@ private:
 	// for STAR-07 RGB, each picture is decomposed to 3 colour components; otherwise display is monochrome (1 colour component)
 	int PostprocessImages(CString *errorMessage = NULL);
 	//int PostprocessImagesMultiSequence(CString* errorMessage = NULL);
-	int AddImageToSequenceV2(BOOL multisequence, int repeats, CString* errorMessage);
+	int AddImageToSequenceV2(int repeats, CString* errorMessage);
 	void SetRecordPreview();
 	//std::vector<std::shared_ptr<Gdiplus::Bitmap>> bitmap_pointers;
 // Construction
@@ -209,6 +209,7 @@ public:
 	afx_msg void OnDestroy();
 	afx_msg
 		void OnBnClickedSetSeqParamTest();
+	BOOL ValidateProjection();
 	void OnBnClickedSetSeqParam();
 	afx_msg void OnBnClickedProjStart();
 	afx_msg void OnBnClickedProjStop();

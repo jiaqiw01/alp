@@ -177,11 +177,12 @@ public:
 	int SetReps(int reps, CString* errorMessage = NULL);
 	// set number of multiplex and record_idx
 	void SetMultiplexRecord(long num_multiplex, long record_idx);
-	int AddImageToSequence(BYTE* pImageData, const int width, const int height, int sequenceID, BOOL restart, CString* errorMessage = NULL);
-	void AddSequence();
+	//int AddImageToSequence(BYTE* pImageData, const int width, const int height, int sequenceID, BOOL restart, CString* errorMessage = NULL);
+	//void AddSequence();
 	int getAvailableSequence();
 	int getNumSequence() { return sequenceID_vector.size(); }
 	int getSequenceID() { return m_SequenceID;  }
+	int getNumPicInSequence();
 	// free the projector
 	int Free(CString *errorMessage = NULL);
 	// true, if the projector was successfully initialized

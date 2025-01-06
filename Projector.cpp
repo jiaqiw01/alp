@@ -128,14 +128,13 @@ int CProjector::SequenceSynchGate(int period, CString* errorMessage) {
 	return ret;
 }
 
+//setting number of repetition, not used, because we project infinitely
 int CProjector::SetReps(int reps, CString* errorMessage) {
 	num_reps = reps;
 	long lRet = ALP_OK;
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqControl(m_DeviceID, sequenceID_vector[i], ALP_SEQ_REPEAT, num_reps);
-		if (ALP_OK != lRet)
-			*errorMessage = L"Error in setting number of sequence repeats in alpseqcontrol for .";
-	}
+	lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_SEQ_REPEAT, num_reps);
+	if (ALP_OK != lRet)
+		*errorMessage = L"Error in setting number of sequence repeats in alpseqcontrol for .";
 	return lRet;
 	
 }
@@ -176,6 +175,13 @@ int CProjector::Alloc(CString* errorMessage)
 	return lRet;
 }
 
+
+int CProjector::getNumPicInSequence()
+{
+	long num_pic = 0;
+	long ret = AlpSeqInquire(m_DeviceID, m_SequenceID, ALP_PICNUM, &num_pic);
+	return num_pic;
+}
 
 // free the projector
 int CProjector::Free(CString* errorMessage)
@@ -275,13 +281,13 @@ int CProjector::SequenceAlloc(const int Bitplanes, const int nPictures, CString*
 int CProjector::SequenceFree(CString* errorMessage)
 {
 	long lRet = ALP_OK;
-	lRet = AlpSeqFree(m_DeviceID, m_SequenceID);
-	if (lRet == ALP_OK) {
-		m_SequenceID = 0;
-		m_ImageIdx = 0;
-		sequenceID_vector.clear();
+	if (m_SequenceID > 0) {
+		lRet = AlpSeqFree(m_DeviceID, m_SequenceID);
+		if (lRet == ALP_OK) {
+			m_SequenceID = 0;
+			m_ImageIdx = 0;
+		}
 	}
-
 	return lRet;
 }
 
@@ -289,8 +295,8 @@ int CProjector::SequenceFree(CString* errorMessage)
 // true, if the sequence was successfully initialized
 bool CProjector::IsValidSequence(void) const
 {
-	//return IsConnected() == true && m_SequenceID != 0;
-	return IsConnected() == true;
+	return IsConnected() == true && m_SequenceID != 0;
+	//return IsConnected() == true;
 }
 
 
@@ -360,14 +366,13 @@ int CProjector::SetSeqProperties(const CTimingEx& timing, CString* errorMessage)
 	long	IlluminateTime = (timing.IlluminateTime < 1) ? 0 : timing.IlluminateTime;
 	long	PictureTime = (timing.PictureTime < 1) ? (timing.IlluminateTime + minDark + SynchDelay) : (timing.PictureTime);
 
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqTiming(m_DeviceID, sequenceID_vector[i],						// call the api function AlpSeqTiming()
-			IlluminateTime,
-			PictureTime,
-			SynchDelay,
-			SynchPulseWidth,
-			TriggerInDelay);
-	}
+	lRet = AlpSeqTiming(m_DeviceID, m_SequenceID,						// call the api function AlpSeqTiming()
+		IlluminateTime,
+		PictureTime,
+		SynchDelay,
+		SynchPulseWidth,
+		TriggerInDelay);
+	
 
 	if (ALP_OK != lRet && NULL != errorMessage)
 		*errorMessage = L"Error in AlpSeqTiming while setting the properties of the sequence.";
@@ -379,38 +384,37 @@ int CProjector::SetSeqProperties(const CTimingEx& timing, CString* errorMessage)
 int CProjector::GetSeqFastestTiming(const long BitNum, const bool Uninterrupted, long& MinPicTime, long& MinIllTime, CString* errorMessage)
 {
 	long lRet = ALP_OK;
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqControl(m_DeviceID, sequenceID_vector[i], ALP_BITNUM, BitNum);	// call the api function AlpSeqControl
+	lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_BITNUM, BitNum);	// call the api function AlpSeqControl
 
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				*errorMessage = L"Error in AlpSeqControl while changing the number of bit planes.";
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqControl while changing the number of bit planes.";
 
-			return lRet;
-		}
-		lRet = AlpSeqControl(m_DeviceID, sequenceID_vector[i], ALP_BIN_MODE, Uninterrupted ? ALP_BIN_UNINTERRUPTED : ALP_BIN_NORMAL);
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				*errorMessage = L"Error in AlpSeqControl while changing the number of bit planes.";
-
-			return lRet;
-		}
-
-		lRet = AlpSeqInquire(m_DeviceID, sequenceID_vector[i], ALP_MIN_PICTURE_TIME, &MinPicTime);	// call the api function AlpSeqInquire
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				*errorMessage = L"Error in AlpSeqInquire while inquiring the minimal picture time.";
-
-			return lRet;
-		}
-
-		lRet = AlpSeqInquire(m_DeviceID, sequenceID_vector[i], ALP_MIN_ILLUMINATE_TIME, &MinIllTime);	// call the api function AlpSeqInquire
-		if (ALP_OK != lRet && NULL != errorMessage)
-			*errorMessage = L"Error in AlpSeqInquire while inquiring the minimal illuminate time.";
+		return lRet;
 	}
+	lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_BIN_MODE, Uninterrupted ? ALP_BIN_UNINTERRUPTED : ALP_BIN_NORMAL);
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqControl while changing the number of bit planes.";
+
+		return lRet;
+	}
+
+	lRet = AlpSeqInquire(m_DeviceID, m_SequenceID, ALP_MIN_PICTURE_TIME, &MinPicTime);	// call the api function AlpSeqInquire
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqInquire while inquiring the minimal picture time.";
+
+		return lRet;
+	}
+
+	lRet = AlpSeqInquire(m_DeviceID, m_SequenceID, ALP_MIN_ILLUMINATE_TIME, &MinIllTime);	// call the api function AlpSeqInquire
+	if (ALP_OK != lRet && NULL != errorMessage)
+		*errorMessage = L"Error in AlpSeqInquire while inquiring the minimal illuminate time.";
+	
 	return lRet;
 }
 
@@ -450,39 +454,30 @@ int CProjector::SelectMaxBitnum(IN OUT CTimingEx& timing, CString* errorMessage)
 int CProjector::SetSeqTiming(IN OUT CTimingEx& timing, CString* errorMessage)
 {
 	long lRet;
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqControl(m_DeviceID, sequenceID_vector[i], ALP_BITNUM, timing.BitNum); // BitNum is 1
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				errorMessage->Format(L"Error in AlpSeqControl while selecting ALP_BITNUM for sequence %d", i);
-			return lRet;
-		}
+	
+	lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_BITNUM, timing.BitNum); // BitNum is 1
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqControl while selecting ALP_BITNUM for sequence";
+		return lRet;
 	}
-	
-	
-	//lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_BIN_MODE, ALP_BIN_NORMAL);
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqControl(m_DeviceID, sequenceID_vector[i], ALP_BIN_MODE, ALP_BIN_UNINTERRUPTED);
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				errorMessage->Format(L"Error in AlpSeqControl while selecting binary mode for sequence %d", i);
-			return lRet;
-		}
+	lRet = AlpSeqControl(m_DeviceID, m_SequenceID, ALP_BIN_MODE, ALP_BIN_UNINTERRUPTED);
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqControl while selecting binary mode for sequence";
+		return lRet;
 	}
 	
 
 	// Note: In some cases the ALP API automatically adjusts inconsistent parameters.
-	// lRet = AlpSeqTiming( m_DeviceID, m_SequenceID, timing.IlluminateTime, timing.PictureTime, timing.SynchDelay, ALP_DEFAULT, ALP_DEFAULT);
-	for (int i = 0; i < sequenceID_vector.size(); ++i) {
-		lRet = AlpSeqTiming(m_DeviceID, sequenceID_vector[i], ALP_DEFAULT, timing.PictureTime, 0, ALP_DEFAULT, ALP_DEFAULT);
-		if (ALP_OK != lRet)
-		{
-			if (NULL != errorMessage)
-				errorMessage->Format(L"Error in AlpSeqTiming while selecting binary mode for sequence %d", i);
-			return lRet;
-		}
+	lRet = AlpSeqTiming( m_DeviceID, m_SequenceID, timing.IlluminateTime, timing.PictureTime, timing.SynchDelay, ALP_DEFAULT, ALP_DEFAULT);
+	if (ALP_OK != lRet)
+	{
+		if (NULL != errorMessage)
+			*errorMessage = L"Error in AlpSeqTiming while selecting binary mode for sequence";
+		return lRet;
 	}
 
 	return lRet;
@@ -523,30 +518,30 @@ void CProjector::SetMultiplexRecord(long num_multiplex, long record_idx) {
 	this->record_idx = record_idx;
 }
 
-int CProjector::AddImageToSequence(BYTE* pImageData, const int width, const int height, int sequenceID, BOOL restart, CString* errorMessage)
-{
-	if (GetWidth() != width || GetHeight() != height)
-		return PROJECTOR_ERROR_SEQ_IMG_SIZE;
-
-	//if this is a brand new sequence, reset image idx
-	if (restart) {
-		m_ImageIdx = 0;
-	}
-	if (!(sequenceID >= 0 && sequenceID < sequenceID_vector.size())) {
-		*errorMessage = L"Sequence ID out of valid range";
-		return 0;
-	}
-
-	long lRet = AlpSeqPut(m_DeviceID, sequenceID_vector[sequenceID], m_ImageIdx, 1, pImageData);	// call the api function AlpSeqPut()
-	if (ALP_OK == lRet) {
-		m_ImageIdx++;
-		return 1;
-	}
-	else
-		if (NULL != errorMessage)
-			*errorMessage = L"Error in AlpSeqPut while adding an image to the sequence.";
-	return 0;
-}
+//int CProjector::AddImageToSequence(BYTE* pImageData, const int width, const int height, int sequenceID, BOOL restart, CString* errorMessage)
+//{
+//	if (GetWidth() != width || GetHeight() != height)
+//		return PROJECTOR_ERROR_SEQ_IMG_SIZE;
+//
+//	//if this is a brand new sequence, reset image idx
+//	if (restart) {
+//		m_ImageIdx = 0;
+//	}
+//	if (!(sequenceID >= 0 && sequenceID < sequenceID_vector.size())) {
+//		*errorMessage = L"Sequence ID out of valid range";
+//		return 0;
+//	}
+//
+//	long lRet = AlpSeqPut(m_DeviceID, sequenceID_vector[sequenceID], m_ImageIdx, 1, pImageData);	// call the api function AlpSeqPut()
+//	if (ALP_OK == lRet) {
+//		m_ImageIdx++;
+//		return 1;
+//	}
+//	else
+//		if (NULL != errorMessage)
+//			*errorMessage = L"Error in AlpSeqPut while adding an image to the sequence.";
+//	return 0;
+//}
 
 //void CProjector::AddSequence()
 //{
@@ -600,7 +595,7 @@ int CProjector::ProjStartContinuous(CString* errorMessage)
 	//	lRet = AlpProjStart(m_DeviceID, sequenceID_vector[0]);
 	//}
 	//else {
-	lRet = AlpProjStartCont(m_DeviceID, sequenceID_vector[0]);				// call the api function AlpProjStartCont()
+	lRet = AlpProjStartCont(m_DeviceID, m_SequenceID);				// call the api function AlpProjStartCont()
 	//}
 
 	if (ALP_OK != lRet && NULL != errorMessage)
@@ -609,30 +604,30 @@ int CProjector::ProjStartContinuous(CString* errorMessage)
 	return lRet;
 }
 
-int CProjector::ProjStartSequential(CString* errorMessage)
-{
-	//set queue mode first
-	int ret = AlpProjControl(m_DeviceID, ALP_PROJ_QUEUE_MODE, ALP_PROJ_SEQUENCE_QUEUE);
-	if (ALP_OK != ret)
-		*errorMessage = L"Error in setting sequence queue mode...??";
-	long repeats;
-	//ret = AlpProjInquire(m_DeviceID, ALP_SEQ_REPEAT, &repeats);
-	//if (ret == ALP_OK && repeats == 0) {
-	//	ret = AlpProjControl(m_DeviceID, ALP_SEQ_REPEAT, 10);
-	//}
-	ret = AlpProjStart(m_DeviceID, sequenceID_vector[0]);
-	if (ret != ALP_OK) {
-		errorMessage->Format(L"Error in proj start the first sequence %d...??", sequenceID_vector[0]);
-	}
-	for (int i = 1; i < sequenceID_vector.size(); ++i) {
-		ret = AlpProjStart(m_DeviceID, sequenceID_vector[i]); //enqueue these..
-		if (ret != ALP_OK) {
-			errorMessage->Format(L"Error in proj start enqueue %d", sequenceID_vector[i]);
-		}
-	}
-	
-	return ret;
-}
+//int CProjector::ProjStartSequential(CString* errorMessage)
+//{
+//	//set queue mode first
+//	int ret = AlpProjControl(m_DeviceID, ALP_PROJ_QUEUE_MODE, ALP_PROJ_SEQUENCE_QUEUE);
+//	if (ALP_OK != ret)
+//		*errorMessage = L"Error in setting sequence queue mode...??";
+//	long repeats;
+//	//ret = AlpProjInquire(m_DeviceID, ALP_SEQ_REPEAT, &repeats);
+//	//if (ret == ALP_OK && repeats == 0) {
+//	//	ret = AlpProjControl(m_DeviceID, ALP_SEQ_REPEAT, 10);
+//	//}
+//	ret = AlpProjStart(m_DeviceID, sequenceID_vector[0]);
+//	if (ret != ALP_OK) {
+//		errorMessage->Format(L"Error in proj start the first sequence %d...??", sequenceID_vector[0]);
+//	}
+//	for (int i = 1; i < sequenceID_vector.size(); ++i) {
+//		ret = AlpProjStart(m_DeviceID, sequenceID_vector[i]); //enqueue these..
+//		if (ret != ALP_OK) {
+//			errorMessage->Format(L"Error in proj start enqueue %d", sequenceID_vector[i]);
+//		}
+//	}
+//	
+//	return ret;
+//}
 
 
 // Is the projection running!
@@ -654,7 +649,7 @@ bool CProjector::IsProjection(void) const
 }
 
 
-// stop the projection and free all sequences
+// stop the projection and free all sequences!
 int CProjector::ProjStop(CString* errorMessage)
 {
 	long lRet = AlpProjHalt(m_DeviceID);								// call the api function AlpProjHalt()
